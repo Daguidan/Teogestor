@@ -345,6 +345,13 @@ const App: React.FC = () => {
   useEffect(() => {
     let activeSession = SecureStorage.getItem<AuthSession | null>('active_session', null);
     if (activeSession) {
+      // AUTO-FIX: Se for MASTER e não tiver isSuperAdmin, adiciona.
+      if (activeSession.eventId === 'MASTER' && !activeSession.isSuperAdmin) {
+          activeSession.isSuperAdmin = true;
+          activeSession.role = 'admin';
+          SecureStorage.setItem('active_session', activeSession);
+      }
+
       const isLegacySession = activeSession.role !== 'public' && !activeSession.isSuperAdmin && !activeSession.managementType;
       
       if (isLegacySession) {
@@ -1325,8 +1332,12 @@ const App: React.FC = () => {
         {(isAdmin || isSuperAdmin || authSession.eventId === 'MASTER') && (
           <button 
             onClick={() => setShowCloudModal(true)} 
-            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-red-50 text-red-500 border-red-200 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200'}`}
-            title={cloudUrl ? "Nuvem Conectada (Clique para configurar)" : "Configurar Nuvem"}
+            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm ${
+                cloudUrl 
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200' 
+                : 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 animate-pulse'
+            }`}
+            title={cloudUrl ? "Nuvem Conectada" : "Nuvem Desconectada (Configurar)"}
           >
             <Cloud size={20} />
             {!cloudUrl && <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>}
