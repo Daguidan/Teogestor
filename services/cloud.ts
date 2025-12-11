@@ -1,5 +1,3 @@
-
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SecureStorage } from './storage';
 import { CryptoService } from './crypto';
@@ -62,6 +60,25 @@ export const CloudService = {
 
   // --- CRUD Operations ---
   
+  // Teste de conexão real
+  testConnection: async () => {
+    if (!supabase) return { success: false, error: 'Cliente não inicializado' };
+    try {
+        // Tenta buscar apenas 1 registro para ver se a tabela existe e a chave funciona
+        const { error } = await supabase.from(TABLE_NAME).select('id').limit(1);
+        
+        if (error) {
+            if (error.code === '42P01') { // Código PostgreSQL para "tabela não existe"
+                return { success: false, error: 'A tabela "evento" não existe. Crie-a no SQL Editor do Supabase.' };
+            }
+            return { success: false, error: error.message };
+        }
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
+    }
+  },
+
   // Salva o estado completo do evento na nuvem (CRIPTOGRAFADO)
   saveEvent: async (eventId: string, data: any) => {
     if (!supabase) return { error: 'Nuvem não conectada' };

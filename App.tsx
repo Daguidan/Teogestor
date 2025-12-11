@@ -68,7 +68,8 @@ import {
   ArrowLeft,
   Upload,
   RefreshCw,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -153,6 +154,7 @@ const App: React.FC = () => {
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudKey, setCloudKey] = useState('');
   const [cloudPass, setCloudPass] = useState('');
+  const [isTestingCloud, setIsTestingCloud] = useState(false);
   
   const [providerEventList, setProviderEventList] = useState<ProviderEventInfo[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -670,447 +672,6 @@ const App: React.FC = () => {
     loadDataForSession();
   }, [authSession, selectedEventType, showTypeSelection, isDirectLink, loginEventId, isRepairingSession]);
 
-  useEffect(() => {
-    setConfirmedVolunteer(null);
-    setIsDisambiguationRequired(false);
-    setPotentialMatches([]);
-    
-    const userName = authSession?.userName;
-    if (!userName || authSession?.role !== 'public' || !selectedUserCongId) {
-      return;
-    }
-    
-    const selectedCongName = orgData.generalInfo?.congregations?.find(c => c.id === selectedUserCongId)?.name;
-    if (!selectedCongName) return;
-
-    const allVolunteersInCong: VolunteerData[] = [];
-    const seenNames = new Set<string>();
-
-    const addVolunteer = (v: VolunteerData | null) => {
-      if (v && v.name && v.congregation && normalizeString(v.congregation) === normalizeString(selectedCongName) && !seenNames.has(normalizeString(v.name))) {
-        allVolunteersInCong.push(v);
-        seenNames.add(normalizeString(v.name));
-      }
-    };
-    
-    if (orgData.committee) {
-      Object.values(orgData.committee).forEach(v => addVolunteer(v));
-    }
-    
-    const allDepts = [
-      ...(orgData.aoDepartments || []), ...(orgData.aaoDepartments || []),
-      ...(orgData.coordDepartments || []), ...(orgData.progDepartments || []),
-      ...(orgData.roomDepartments || [])
-    ];
-    allDepts.forEach(dept => {
-      addVolunteer(dept.overseer);
-      dept.assistants.forEach(v => addVolunteer(v));
-    });
-    
-    if (orgData.parkingData) {
-      orgData.parkingData.forEach(sector => {
-        addVolunteer(sector.morningVol1);
-        addVolunteer(sector.morningVol2);
-        addVolunteer(sector.afternoonVol1);
-        addVolunteer(sector.afternoonVol2);
-      });
-    }
-    
-    if (orgData.generalInfo?.congregations) {
-        const cong = orgData.generalInfo.congregations.find(c => c.id === selectedUserCongId);
-        if (cong && cong.cleaningResponsable) {
-            const volunteer: VolunteerData = {
-                name: cong.cleaningResponsable,
-                congregation: cong.name,
-                phone: cong.cleaningResponsablePhone || '',
-                email: '',
-                lgpdConsent: true,
-            };
-            addVolunteer(volunteer);
-        }
-    }
-
-    if (orgData.attendantsData) {
-        orgData.attendantsData.forEach(attendant => {
-            const volunteersToAdd = [
-                { name: attendant.morning_vol1_name, phone: attendant.morning_vol1_phone, congId: attendant.morning_vol1_congId },
-                { name: attendant.morning_vol2_name, phone: attendant.morning_vol2_phone, congId: attendant.morning_vol2_congId },
-                { name: attendant.afternoon_vol1_name, phone: attendant.afternoon_vol1_phone, congId: attendant.afternoon_vol1_congId },
-                { name: attendant.afternoon_vol2_name, phone: attendant.afternoon_vol2_phone, congId: attendant.afternoon_vol2_congId },
-            ];
-
-            volunteersToAdd.forEach(vol => {
-                if (vol.name && vol.congId === selectedUserCongId) {
-                    const volunteer: VolunteerData = {
-                        name: vol.name,
-                        congregation: selectedCongName,
-                        phone: vol.phone || '',
-                        email: '',
-                        lgpdConsent: true,
-                    };
-                    addVolunteer(volunteer);
-                }
-            });
-        });
-    }
-
-    const matches = allVolunteersInCong.filter(v => nameMatches(userName, v.name));
-
-    if (matches.length > 0) {
-      if (matches.length === 1 && normalizeString(matches[0].name) === normalizeString(userName)) {
-        setConfirmedVolunteer(matches[0]);
-      } else {
-        setPotentialMatches(matches);
-        setIsDisambiguationRequired(true);
-      }
-    }
-  }, [authSession, selectedUserCongId, orgData]);
-
-  const handleRepairSession = (type: 'ASSEMBLY' | 'CONVENTION') => {
-    if (!authSession) return;
-    const repairedSession = { ...authSession, managementType: type };
-    setAuthSession(repairedSession);
-    SecureStorage.setItem('active_session', repairedSession);
-    setIsRepairingSession(false);
-    if (type === 'ASSEMBLY') {
-      setShowTypeSelection(true);
-    } else {
-      setSelectedEventType('REGIONAL_CONVENTION');
-    }
-  };
-
-  const handleCongregationSelect = (congId: string) => { SecureStorage.setItem('user_congregation_id', congId); setSelectedUserCongId(congId); };
-  const handleDisambiguationSubmit = () => {
-    if (!disambiguationPhoneInput) return;
-    const normalizedInputPhone = normalizePhone(disambiguationPhoneInput);
-    const match = potentialMatches.find(v => normalizePhone(v.phone) === normalizedInputPhone);
-    if (match) { setConfirmedVolunteer(match); setIsDisambiguationRequired(false); setDisambiguationPhoneInput(''); } 
-    else { alert("Telefone não encontrado."); }
-  };
-  const selectedCong = useMemo(() => orgData.generalInfo?.congregations?.find(c => c.id === selectedUserCongId), [orgData, selectedUserCongId]);
-  const myAttendantAssignments = useMemo(() => {
-    const userName = confirmedVolunteer?.name; const attendantsData = orgData.attendantsData || [];
-    if (!userName || !selectedUserCongId) return [];
-    const assignments: { sectorId: string, period: string, customName?: string, canReport: boolean, rawPeriod: 'morning' | 'afternoon' }[] = [];
-    attendantsData.forEach(a => {
-        let isMorning = false; let isAfternoon = false;
-        if (a.morning_vol1_congId === selectedUserCongId && normalizeString(userName) === normalizeString(a.morning_vol1_name || '')) isMorning = true;
-        if (a.morning_vol2_congId === selectedUserCongId && normalizeString(userName) === normalizeString(a.morning_vol2_name || '')) isMorning = true;
-        if (a.afternoon_vol1_congId === selectedUserCongId && normalizeString(userName) === normalizeString(a.afternoon_vol1_name || '')) isAfternoon = true;
-        if (a.afternoon_vol2_congId === selectedUserCongId && normalizeString(userName) === normalizeString(a.afternoon_vol2_name || '')) isAfternoon = true;
-        if (isMorning) assignments.push({ sectorId: a.sectorId, period: 'Manhã', customName: a.customName, canReport: true, rawPeriod: 'morning' });
-        if (isAfternoon) assignments.push({ sectorId: a.sectorId, period: 'Tarde', customName: a.customName, canReport: true, rawPeriod: 'afternoon' });
-    }); return assignments;
-  }, [confirmedVolunteer, orgData.attendantsData, selectedUserCongId]);
-  const myOrganogramAssignments = useMemo(() => {
-     const userName = confirmedVolunteer?.name; if (!userName) return [];
-     const assignments: { role: string, dept: string }[] = [];
-     const checkVolunteer = (v: VolunteerData | null, r: string, d: string) => { if (v && v.name && normalizeString(userName) === normalizeString(v.name)) { assignments.push({ role: r, dept: d }); } };
-     if (orgData.committee) { Object.entries(orgData.committee).forEach(([key, value]) => checkVolunteer(value, key, 'Comissão')); }
-     const allDepts = [ ...(orgData.aoDepartments || []), ...(orgData.aaoDepartments || []), ...(orgData.coordDepartments || []), ...(orgData.progDepartments || []), ...(orgData.roomDepartments || []) ];
-     allDepts.forEach(d => { checkVolunteer(d.overseer, 'Encarregado', d.name); d.assistants.forEach(a => checkVolunteer(a, 'Assistente', d.name)); });
-     return assignments;
-  }, [confirmedVolunteer, orgData]);
-  
-  const hasOrganogramRole = myOrganogramAssignments.length > 0;
-  const publicAnnouncements = useMemo(() => orgData.generalInfo?.publicAnnouncements, [orgData]);
-  const openReportModal = (sId: string, p: 'morning' | 'afternoon') => { setReportSectorId(sId); setReportPeriod(p); setShowReportModal(true); };
-
-  const handleLogin = (e: React.FormEvent, mode: 'public' | 'admin') => {
-    e.preventDefault();
-    setLoginError('');
-    const normalizedId = loginEventId.trim().toUpperCase();
-
-    // PUBLIC LOGIN (With Data Preservation Fix)
-    if (mode === 'public') {
-        if (!normalizedId) { setLoginError('ID do Evento não encontrado.'); return; }
-        
-        // Try to recover event type from previous session or preload
-        const preloadedType = SecureStorage.getItem<EventType | null>(`${normalizedId}_last_event_type`, null);
-        if (preloadedType) {
-            setSelectedEventType(preloadedType);
-        }
-
-        // AUTO-DETECT MANAGEMENT TYPE
-        let mType: 'ASSEMBLY' | 'CONVENTION' = 'ASSEMBLY';
-        if (orgData.coordDepartments && orgData.coordDepartments.length > 0) {
-            mType = 'CONVENTION';
-        } else if (selectedEventType === 'REGIONAL_CONVENTION') {
-            mType = 'CONVENTION';
-        }
-
-        // CRITICAL FIX FOR INCOGNITO/NEW SESSIONS:
-        // If we have data in memory (loaded via link) but local storage is empty,
-        // we MUST save the memory data to storage NOW, before the session init logic wipes it.
-        if (!isOrgEmpty(orgData) && isDirectLink) {
-            const saveKey = mType === 'CONVENTION' ? `${normalizedId}_CONVENTION_structure` : `${normalizedId}_structure`;
-            const storageCheck = SecureStorage.getItem(saveKey, null);
-            
-            // Only save if storage is actually empty to avoid overwriting existing local data
-            if (!storageCheck) {
-                SecureStorage.setItem(saveKey, orgData);
-                // ALSO SAVE PROGRAM TO PREVENT "NO PROGRAM" ERROR
-                SecureStorage.setItem(`${normalizedId}_program_${program.type}`, program);
-            }
-        }
-
-        const session: AuthSession = { 
-            eventId: normalizedId, 
-            role: 'public', 
-            timestamp: Date.now(), 
-            userName: loginName.trim() || 'Visitante',
-            managementType: mType 
-        };
-        
-        setAuthSession(session);
-        SecureStorage.setItem('active_session', session);
-        setView('dashboard');
-        return;
-    }
-
-    const pin = loginPin.trim();
-    if (!normalizedId || !pin || !acceptedTerms) {
-        setLoginError('Preencha todos os campos e aceite os termos.');
-        return;
-    }
-
-    if (normalizedId === 'MASTER' && pin === APP_CONFIG.MASTER_PIN) {
-        const session: AuthSession = { eventId: 'MASTER', role: 'admin', timestamp: Date.now(), userName: 'Provedor Master', isSuperAdmin: true };
-        setAuthSession(session);
-        SecureStorage.setItem('active_session', session);
-        setShowAdminModal(false);
-        setView('dashboard');
-        return;
-    }
-
-    // Try to load data from storage
-    let conventionData = SecureStorage.getItem<OrgStructure | null>(`${normalizedId}_CONVENTION_structure`, null);
-    let assemblyData = SecureStorage.getItem<OrgStructure | null>(`${normalizedId}_structure`, null);
-
-    // CRITICAL FIX FOR ADMIN IN INCOGNITO:
-    // If storage is empty (new session) BUT we have data in memory (from link),
-    // Use the memory data for validation and persistence.
-    if (isOrgEmpty(conventionData) && isOrgEmpty(assemblyData) && !isOrgEmpty(orgData) && isDirectLink) {
-        if (orgData.coordDepartments && orgData.coordDepartments.length > 0) {
-            conventionData = orgData;
-            SecureStorage.setItem(`${normalizedId}_CONVENTION_structure`, orgData);
-        } else {
-            assemblyData = orgData;
-            SecureStorage.setItem(`${normalizedId}_structure`, orgData);
-        }
-    }
-
-    const adminPin = (conventionData?.generalInfo?.teamAccessPin || assemblyData?.generalInfo?.teamAccessPin) || APP_CONFIG.ADMIN_PIN;
-    const volunteerPin = (conventionData?.generalInfo?.volunteerAccessPin || assemblyData?.generalInfo?.volunteerAccessPin) || APP_CONFIG.VOLUNTEER_PIN;
-    
-    let role: UserRole | null = null;
-    let session: AuthSession | null = null;
-
-    if (pin === adminPin) role = 'admin';
-    else if (pin === volunteerPin) role = 'volunteer';
-    else {
-        setLoginError('PIN incorreto.');
-        return;
-    }
-
-    if (!isOrgEmpty(conventionData) && !isOrgEmpty(assemblyData)) {
-        session = { eventId: normalizedId, role, timestamp: Date.now(), userName: loginName.trim() || (role === 'admin' ? 'Admin' : 'Voluntário') };
-        setAuthSession(session);
-        SecureStorage.setItem('active_session', session);
-        setIsRepairingSession(true);
-        setShowAdminModal(false);
-        return;
-    }
-
-    // Default detection if not repairing
-    let mType = initialManagementType;
-    if (!mType) {
-        if (selectedEventType === 'REGIONAL_CONVENTION') mType = 'CONVENTION';
-        else if (selectedEventType) mType = 'ASSEMBLY';
-        else mType = !isOrgEmpty(conventionData) ? 'CONVENTION' : 'ASSEMBLY';
-    }
-    
-    session = { eventId: normalizedId, role, timestamp: Date.now(), userName: loginName.trim() || (role === 'admin' ? 'Admin' : 'Voluntário'), managementType: mType };
-    
-    if (role === 'volunteer') {
-        const org = mType === 'CONVENTION' ? conventionData : assemblyData;
-        const userName = session.userName;
-        if (org && userName) {
-            const indicatorsOverseer = findDepartmentByName(org, 'Indicadores')?.overseer;
-            const parkingOverseer = findDepartmentByName(org, 'Estacionamento')?.overseer;
-
-            if (indicatorsOverseer && normalizeString(indicatorsOverseer.name) === normalizeString(userName)) {
-                session.departmentAccess = 'attendants';
-            } else if (parkingOverseer && normalizeString(parkingOverseer.name) === normalizeString(userName)) {
-                session.departmentAccess = 'parking';
-            }
-        }
-    }
-    
-    setAuthSession(session);
-    SecureStorage.setItem('active_session', session);
-    setShowAdminModal(false);
-
-    if (mType === 'CONVENTION') {
-        handleSelectEventType('REGIONAL_CONVENTION', false);
-    } else {
-        const lastType = SecureStorage.getItem<EventType>(`${normalizedId}_last_event_type`, 'BETHEL_REP');
-        if (lastType && lastType !== 'REGIONAL_CONVENTION') {
-            handleSelectEventType(lastType, false);
-        } else {
-            setShowTypeSelection(true);
-        }
-    }
-  };
-  
-  const handleOrganogramPinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const volunteerPin = orgData.generalInfo?.volunteerAccessPin || APP_CONFIG.VOLUNTEER_PIN;
-    if (organogramPinInput === volunteerPin) { setShowOrganogramPinModal(false); setOrganogramPinInput(''); setOrganogramPinError(''); setView('organogram'); } 
-    else { setOrganogramPinError('PIN incorreto.'); }
-  };
-
-  const handleSelectEventType = (type: EventType, save: boolean = true) => {
-     setSelectedEventType(type);
-     if (save && authSession) SecureStorage.setItem(`${authSession.eventId}_last_event_type`, type);
-     setShowTypeSelection(false);
-     setView('dashboard');
-  };
-  
-  const handleEditTemplate = (eventType: EventType) => {
-    let templateId: string;
-    let managementType: 'ASSEMBLY' | 'CONVENTION';
-
-    switch (eventType) {
-      case 'BETHEL_REP':
-        templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_BETHEL;
-        managementType = 'ASSEMBLY';
-        break;
-      case 'CIRCUIT_OVERSEER':
-        templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_CO;
-        managementType = 'ASSEMBLY';
-        break;
-      case 'REGIONAL_CONVENTION':
-        templateId = TEMPLATE_EVENT_IDS.CONVENTION_REGIONAL;
-        managementType = 'CONVENTION';
-        break;
-      default:
-        return;
-    }
-
-    const templateSession: AuthSession = {
-      eventId: templateId,
-      role: 'admin',
-      timestamp: Date.now(),
-      userName: 'Editor de Modelo',
-      isTemplate: true,
-      managementType,
-    };
-    setAuthSession(templateSession);
-    setSelectedEventType(eventType);
-  };
-  
-  const handleReturnToProviderPanel = () => {
-    const masterSession: AuthSession = { eventId: 'MASTER', role: 'admin', timestamp: Date.now(), userName: 'Provedor Master', isSuperAdmin: true };
-    setAuthSession(masterSession);
-    setSelectedEventType(null);
-    setView('dashboard');
-  };
-
-  const handleUpdateOrg = (newData: OrgStructure) => {
-    if (!newData) return;
-    setOrgData(newData);
-    if (authSession && selectedEventType) {
-       const isConventionType = selectedEventType === 'REGIONAL_CONVENTION';
-       const structKey = isConventionType ? `${authSession.eventId}_CONVENTION_structure` : `${authSession.eventId}_structure`;
-       SecureStorage.setItem(structKey, newData);
-    }
-  };
-
-  const handleForceRestoreFromBackup = async (fullBackup: any) => {
-    if (!authSession) return;
-    
-    // Suporte a legado (só structure) e novo (appData completo)
-    let structure, eventType, backupNotes, backupAttendance, backupProgram;
-
-    if (fullBackup.appData) {
-        // Novo formato
-        structure = fullBackup.appData.structure;
-        eventType = fullBackup.appData.eventType;
-        backupNotes = fullBackup.appData.notes;
-        backupAttendance = fullBackup.appData.attendance;
-        backupProgram = fullBackup.appData.program;
-    } else {
-        // Formato antigo (apenas estrutura)
-        structure = fullBackup;
-        // Tenta inferir tipo
-        eventType = structure.coordDepartments ? 'REGIONAL_CONVENTION' : 'BETHEL_REP';
-    }
-
-    if (!structure) {
-      alert("Backup inválido.");
-      return;
-    }
-    
-    const currentIsConvention = authSession.managementType === 'CONVENTION';
-    const wrongKey = currentIsConvention ? `${authSession.eventId}_structure` : `${authSession.eventId}_CONVENTION_structure`;
-    localStorage.removeItem(`congass_enc_${wrongKey}`);
-
-    handleUpdateOrg(structure);
-    
-    // Se tivermos o programa no backup, usamos. Se não, usamos o padrão.
-    const programToSave = backupProgram || (eventType === 'BETHEL_REP' ? PROGRAM_BETHEL : (eventType === 'CIRCUIT_OVERSEER' ? PROGRAM_CO : PROGRAM_CONVENTION));
-    setProgram(programToSave);
-    SecureStorage.setItem(`${authSession.eventId}_program_${eventType}`, programToSave);
-    
-    if (eventType) {
-        setSelectedEventType(eventType);
-        SecureStorage.setItem(`${authSession.eventId}_last_event_type`, eventType);
-    }
-
-    if (backupNotes) {
-      setNotes(backupNotes);
-      SecureStorage.setItem(`${authSession.eventId}_notes`, backupNotes);
-    }
-    if (backupAttendance) {
-      setAttendance(backupAttendance);
-      SecureStorage.setItem(`${authSession.eventId}_attendance`, backupAttendance);
-    }
-
-    // AUTOMATIC CLOUD SYNC
-    const config = CloudService.getConfig();
-    if (config) {
-        setSyncStatus('syncing');
-        // Construct payload similar to handleSync('up')
-        const payload = { 
-            org: structure, 
-            notes: backupNotes || {}, 
-            attendance: backupAttendance || {}, 
-            program: programToSave, 
-            type: eventType, 
-            version: APP_CONFIG.APP_VERSION 
-        };
-        
-        try {
-            const res = await CloudService.saveEvent(authSession.eventId, payload);
-            if (res.error) {
-                alert(`Backup restaurado localmente, mas falha ao sincronizar com nuvem: ${res.error}`);
-                setSyncStatus('error');
-            } else {
-                alert(`Backup restaurado e sincronizado com a nuvem com sucesso!`);
-                setSyncStatus('success');
-            }
-        } catch (e) {
-            console.error("Auto sync failed", e);
-            setSyncStatus('error');
-        }
-        setTimeout(() => setSyncStatus('idle'), 3000);
-    } else {
-        alert("Backup restaurado APENAS NESTE DISPOSITIVO. Para compartilhar, configure a Nuvem no ícone superior direito.");
-    }
-  };
-
-
   const handleUpdateAttendant = (sId: string, f: string, v: any) => {
       const cAtt = orgData.attendantsData || []; const idx = cAtt.findIndex(a => a.sectorId === sId);
       const nData = [...cAtt];
@@ -1119,7 +680,7 @@ const App: React.FC = () => {
   };
   const handleReportAttendance = () => {
       if (!reportValue) return;
-      handleUpdateAttendant(reportSectorId, reportPeriod === 'morning' ? 'countMorning' : 'afternoon', parseInt(reportValue) || 0);
+      handleUpdateAttendant(reportSectorId, reportPeriod === 'morning' ? 'countMorning' : 'countAfternoon', parseInt(reportValue) || 0);
       setReportSent(true); setTimeout(() => { setReportSent(false); setShowReportModal(false); setReportValue(''); }, 1500);
   };
   const handleAddSuggestion = (text: string) => {
@@ -1131,17 +692,32 @@ const App: React.FC = () => {
   const handleUpdateNotes = (id: string, text: string) => { const n = { ...notes, [id]: text }; setNotes(n); if (authSession) SecureStorage.setItem(`${authSession.eventId}_notes`, n); };
   const handleUpdateAttendance = (id: string, val: string) => { const a = { ...attendance, [id]: val }; setAttendance(a); if (authSession) SecureStorage.setItem(`${authSession.eventId}_attendance`, a); };
   const handleUpdateProgram = (nP: AssemblyProgram) => { if(!nP) return; setProgram(nP); if (authSession) SecureStorage.setItem(`${authSession.eventId}_program_${program.type}`, nP); };
-  const handleCloudConfigSave = () => { 
+  
+  const handleCloudConfigSave = async () => { 
       if (!cloudUrl || !cloudKey || !cloudPass) {
           alert("Por favor, preencha URL, API Key e a Senha de Criptografia.");
           return;
       }
+      
+      setIsTestingCloud(true);
+      
+      // 1. Configura localmente
       if (CloudService.configure(cloudUrl, cloudKey, cloudPass)) { 
-          setShowCloudModal(false); 
-          setSyncStatus('idle'); 
-          alert("Conexão estabelecida com sucesso!"); 
+          // 2. Testa a conexão real
+          const result = await CloudService.testConnection();
+          
+          setIsTestingCloud(false);
+          
+          if (result.success) {
+              setShowCloudModal(false); 
+              setSyncStatus('idle'); 
+              alert("✅ Conexão estabelecida com sucesso! A tabela está pronta."); 
+          } else {
+              alert(`⚠️ Credenciais salvas, mas houve um erro ao conectar: \n\n${result.error}`);
+          }
       } else {
-          alert("Erro ao conectar. Verifique a URL e a API Key."); 
+          setIsTestingCloud(false);
+          alert("Erro ao salvar configuração. Verifique os dados."); 
       }
   };
   
@@ -1267,6 +843,285 @@ const App: React.FC = () => {
 
   const showPublicDashboard = isPublic && !isAttendantOverseer && !isParkingOverseer;
 
+  const handleUpdateOrg = (newOrg: OrgStructure) => {
+    setOrgData(newOrg);
+    if (authSession) {
+       const isConvention = selectedEventType === 'REGIONAL_CONVENTION';
+       const structKey = isConvention ? `${authSession.eventId}_CONVENTION_structure` : `${authSession.eventId}_structure`;
+       SecureStorage.setItem(structKey, newOrg);
+    } else if (loginEventId) {
+       const isConvention = selectedEventType === 'REGIONAL_CONVENTION';
+       const structKey = isConvention ? `${loginEventId}_CONVENTION_structure` : `${loginEventId}_structure`;
+       SecureStorage.setItem(structKey, newOrg);
+    }
+  };
+
+  const handleLogin = (e: React.FormEvent, role: UserRole) => {
+    e.preventDefault();
+    setLoginError('');
+
+    const eventIdInput = loginEventId.trim().toUpperCase();
+    if (!eventIdInput) {
+      setLoginError('Por favor, informe o ID do Evento.');
+      return;
+    }
+
+    if (role === 'admin') {
+      if (eventIdInput === 'MASTER') {
+         if (loginPin !== APP_CONFIG.MASTER_PIN) {
+             setLoginError('Senha Mestra incorreta.');
+             return;
+         }
+      } else {
+         if (loginPin !== APP_CONFIG.ADMIN_PIN) {
+             setLoginError('PIN Administrativo incorreto.');
+             return;
+         }
+      }
+    }
+
+    const newSession: AuthSession = {
+      eventId: eventIdInput,
+      role: role,
+      timestamp: Date.now(),
+      userName: loginName || (role === 'admin' ? 'Administrador' : 'Visitante'),
+      isSuperAdmin: eventIdInput === 'MASTER'
+    };
+
+    setAuthSession(newSession);
+    SecureStorage.setItem('active_session', newSession);
+    setShowAdminModal(false);
+    setLoginPin('');
+    setLoginError('');
+  };
+
+  const handleRepairSession = (type: 'ASSEMBLY' | 'CONVENTION') => {
+    if (!authSession) return;
+    const repairedSession = { ...authSession, managementType: type };
+    setAuthSession(repairedSession);
+    SecureStorage.setItem('active_session', repairedSession);
+    setIsRepairingSession(false);
+    
+    if (type === 'CONVENTION') {
+        setSelectedEventType('REGIONAL_CONVENTION');
+    } else {
+        setShowTypeSelection(true);
+    }
+  };
+
+  const handleSelectEventType = (type: EventType) => {
+    setSelectedEventType(type);
+    if (authSession) {
+       SecureStorage.setItem(`${authSession.eventId}_last_event_type`, type);
+    }
+    setShowTypeSelection(false);
+  };
+
+  const handleReturnToProviderPanel = () => {
+    const masterSession: AuthSession = {
+        eventId: 'MASTER',
+        role: 'admin',
+        timestamp: Date.now(),
+        userName: 'Provedor Master',
+        isSuperAdmin: true
+    };
+    setAuthSession(masterSession);
+    SecureStorage.setItem('active_session', masterSession);
+    setSelectedEventType(null);
+  };
+
+  const handleCongregationSelect = (congId: string) => {
+    setSelectedUserCongId(congId);
+    SecureStorage.setItem('user_congregation_id', congId);
+    setConfirmedVolunteer(null);
+    setIsDisambiguationRequired(!!congId);
+  };
+
+  const handleEditTemplate = (type: EventType) => {
+    let templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_BETHEL;
+    if (type === 'CIRCUIT_OVERSEER') templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_CO;
+    if (type === 'REGIONAL_CONVENTION') templateId = TEMPLATE_EVENT_IDS.CONVENTION_REGIONAL;
+    
+    const templateSession: AuthSession = {
+        eventId: templateId,
+        role: 'admin',
+        timestamp: Date.now(),
+        userName: 'Editor de Modelo',
+        isSuperAdmin: true,
+        isTemplate: true
+    };
+    
+    setAuthSession(templateSession);
+    SecureStorage.setItem('active_session', templateSession);
+    setSelectedEventType(type);
+  };
+
+  const handleDisambiguationSubmit = () => {
+      if (!disambiguationPhoneInput) return;
+      const normalizedInput = normalizePhone(disambiguationPhoneInput);
+      
+      let foundVol: VolunteerData | null = null;
+      
+      const searchInDepts = (depts: any[]) => {
+          for (const d of depts) {
+              if (d.overseer && normalizePhone(d.overseer.phone) === normalizedInput) return d.overseer;
+              for (const a of d.assistants) {
+                  if (a && normalizePhone(a.phone) === normalizedInput) return a;
+              }
+          }
+          return null;
+      };
+      
+      foundVol = searchInDepts(orgData.aoDepartments || []) || 
+                 searchInDepts(orgData.aaoDepartments || []) ||
+                 searchInDepts(orgData.coordDepartments || []) ||
+                 searchInDepts(orgData.progDepartments || []) ||
+                 searchInDepts(orgData.roomDepartments || []);
+                 
+      if (!foundVol && orgData.committee) {
+          const c = orgData.committee;
+          const committeeMembers = [
+              c.president, c.assemblyOverseer, c.assistantAssemblyOverseer,
+              c.presidentAssistant1, c.presidentAssistant2, c.conventionCoordinator,
+              c.assistantCoordinator, c.conventionProgramOverseer, c.assistantProgramOverseer,
+              c.conventionRoomingOverseer, c.assistantRoomingOverseer
+          ];
+          foundVol = committeeMembers.find(m => m && normalizePhone(m.phone) === normalizedInput) || null;
+      }
+
+      if (!foundVol && orgData.attendantsData) {
+          for (const att of orgData.attendantsData) {
+              if (normalizePhone(att.morning_vol1_phone || '') === normalizedInput) { foundVol = { name: att.morning_vol1_name!, phone: att.morning_vol1_phone!, congregation: '', email: '', lgpdConsent: true }; break; }
+              if (normalizePhone(att.morning_vol2_phone || '') === normalizedInput) { foundVol = { name: att.morning_vol2_name!, phone: att.morning_vol2_phone!, congregation: '', email: '', lgpdConsent: true }; break; }
+              if (normalizePhone(att.afternoon_vol1_phone || '') === normalizedInput) { foundVol = { name: att.afternoon_vol1_name!, phone: att.afternoon_vol1_phone!, congregation: '', email: '', lgpdConsent: true }; break; }
+              if (normalizePhone(att.afternoon_vol2_phone || '') === normalizedInput) { foundVol = { name: att.afternoon_vol2_name!, phone: att.afternoon_vol2_phone!, congregation: '', email: '', lgpdConsent: true }; break; }
+          }
+      }
+      
+      if (!foundVol && orgData.parkingData) {
+           for (const p of orgData.parkingData) {
+               if (p.morningVol1 && normalizePhone(p.morningVol1.phone) === normalizedInput) { foundVol = p.morningVol1; break; }
+               if (p.morningVol2 && normalizePhone(p.morningVol2.phone) === normalizedInput) { foundVol = p.morningVol2; break; }
+               if (p.afternoonVol1 && normalizePhone(p.afternoonVol1.phone) === normalizedInput) { foundVol = p.afternoonVol1; break; }
+               if (p.afternoonVol2 && normalizePhone(p.afternoonVol2.phone) === normalizedInput) { foundVol = p.afternoonVol2; break; }
+           }
+      }
+
+      if (foundVol) {
+          setConfirmedVolunteer(foundVol);
+          setIsDisambiguationRequired(false);
+          alert(`Bem-vindo, ${foundVol.name}! Suas designações estão visíveis.`);
+      } else {
+          alert("Não encontramos voluntário com este telefone.");
+      }
+  };
+
+  const handleForceRestoreFromBackup = (fullBackup: any) => {
+     if (!fullBackup.appData) return;
+     const { structure, program: prog, notes: nts, attendance: att, eventType } = fullBackup.appData;
+     
+     if (structure) {
+         setOrgData(structure);
+         const key = eventType === 'REGIONAL_CONVENTION' ? `${authSession?.eventId || 'RESTORED'}_CONVENTION_structure` : `${authSession?.eventId || 'RESTORED'}_structure`;
+         SecureStorage.setItem(key, structure);
+     }
+     if (prog) {
+         setProgram(prog);
+         if (authSession?.eventId) SecureStorage.setItem(`${authSession.eventId}_program_${prog.type}`, prog);
+     }
+     if (nts && authSession?.eventId) {
+         setNotes(nts);
+         SecureStorage.setItem(`${authSession.eventId}_notes`, nts);
+     }
+     if (att && authSession?.eventId) {
+         setAttendance(att);
+         SecureStorage.setItem(`${authSession.eventId}_attendance`, att);
+     }
+     if (eventType) {
+         setSelectedEventType(eventType);
+         if (authSession?.eventId) SecureStorage.setItem(`${authSession.eventId}_last_event_type`, eventType);
+     }
+  };
+
+  const handleOrganogramPinSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const correctPin = orgData.generalInfo?.teamAccessPin || APP_CONFIG.VOLUNTEER_PIN;
+      if (organogramPinInput === correctPin || organogramPinInput === APP_CONFIG.ADMIN_PIN) {
+          setView('organogram');
+          setShowOrganogramPinModal(false);
+          setOrganogramPinInput('');
+      } else {
+          setOrganogramPinError('PIN incorreto');
+      }
+  };
+
+  const openReportModal = (sectorId: string, period: 'morning' | 'afternoon') => {
+      setReportSectorId(sectorId);
+      setReportPeriod(period);
+      setReportValue('');
+      setShowReportModal(true);
+  };
+
+  const publicAnnouncements = orgData.generalInfo?.publicAnnouncements || '';
+  
+  const selectedCong = useMemo(() => 
+    orgData.generalInfo?.congregations?.find(c => c.id === selectedUserCongId), 
+  [orgData.generalInfo, selectedUserCongId]);
+
+  const myAttendantAssignments = useMemo(() => {
+     if (!confirmedVolunteer) return [];
+     const assignments: { sectorId: string, customName?: string, period: 'Manhã' | 'Tarde', rawPeriod: 'morning' | 'afternoon', canReport: boolean }[] = [];
+     const normalizedPhone = normalizePhone(confirmedVolunteer.phone);
+     
+     orgData.attendantsData?.forEach(att => {
+         if (normalizePhone(att.morning_vol1_phone || '') === normalizedPhone || normalizePhone(att.morning_vol2_phone || '') === normalizedPhone) {
+             assignments.push({ sectorId: att.sectorId, customName: att.customName, period: 'Manhã', rawPeriod: 'morning', canReport: true });
+         }
+         if (normalizePhone(att.afternoon_vol1_phone || '') === normalizedPhone || normalizePhone(att.afternoon_vol2_phone || '') === normalizedPhone) {
+             assignments.push({ sectorId: att.sectorId, customName: att.customName, period: 'Tarde', rawPeriod: 'afternoon', canReport: true });
+         }
+     });
+     return assignments;
+  }, [confirmedVolunteer, orgData.attendantsData]);
+
+  const myOrganogramAssignments = useMemo(() => {
+      if (!confirmedVolunteer) return [];
+      const assignments: { dept: string, role: string }[] = [];
+      const normalizedPhone = normalizePhone(confirmedVolunteer.phone);
+      
+      const checkDept = (list: any[], listName: string) => {
+          list.forEach(d => {
+              if (d.overseer && normalizePhone(d.overseer.phone) === normalizedPhone) {
+                  assignments.push({ dept: d.name, role: 'Encarregado' });
+              }
+              d.assistants.forEach((a: any, idx: number) => {
+                  if (a && normalizePhone(a.phone) === normalizedPhone) {
+                      assignments.push({ dept: d.name, role: `Assistente ${idx + 1}` });
+                  }
+              });
+          });
+      };
+      
+      checkDept(orgData.aoDepartments || [], 'AO');
+      checkDept(orgData.aaoDepartments || [], 'AAO');
+      checkDept(orgData.coordDepartments || [], 'Coordenação');
+      checkDept(orgData.progDepartments || [], 'Programa');
+      checkDept(orgData.roomDepartments || [], 'Hospedagem');
+      
+      orgData.parkingData?.forEach(p => {
+          if ((p.morningVol1 && normalizePhone(p.morningVol1.phone) === normalizedPhone) || (p.morningVol2 && normalizePhone(p.morningVol2.phone) === normalizedPhone)) {
+             assignments.push({ dept: `Estacionamento - ${p.name}`, role: 'Voluntário (Manhã)' });
+          }
+          if ((p.afternoonVol1 && normalizePhone(p.afternoonVol1.phone) === normalizedPhone) || (p.afternoonVol2 && normalizePhone(p.afternoonVol2.phone) === normalizedPhone)) {
+             assignments.push({ dept: `Estacionamento - ${p.name}`, role: 'Voluntário (Tarde)' });
+          }
+      });
+      
+      return assignments;
+  }, [confirmedVolunteer, orgData]);
+
+  const hasOrganogramRole = myOrganogramAssignments.length > 0;
+
   if (isInitializing) {
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -1338,10 +1193,11 @@ const App: React.FC = () => {
       </div>
 
       <div className="space-y-2 pt-2">
-        <button onClick={handleCloudConfigSave} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02]">
-            Salvar e Conectar
+        <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+            {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : null}
+            {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
         </button>
-        <button onClick={() => setShowCloudModal(false)} className="w-full py-3 text-slate-400 hover:text-slate-600 text-xs font-bold">
+        <button onClick={() => setShowCloudModal(false)} disabled={isTestingCloud} className="w-full py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">
             Cancelar
         </button>
       </div>
