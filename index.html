@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Cache Control: Força o navegador a buscar a versão mais recente -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TeoGestor" />
+    
+    <title>TeoGestor - Gestão Teocrática</title>
+    
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+        overscroll-behavior-y: none;
+      }
+      .font-serif {
+        font-family: 'Playfair Display', serif;
+      }
+      /* Previne zoom automático em inputs no iOS e melhora a quebra de linha */
+      input, textarea {
+        font-size: 16px !important; 
+      }
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        .page-break {
+          page-break-before: always;
+        }
+        .print-cover {
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          background: white;
+        }
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+    </style>
+  <!-- PWA Manifest Injection -->
+  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiVGVvR2VzdG9yIC0gR2VzdMOjbyBUZW9jcsOhdGljYSIsInNob3J0X25hbWUiOiJUZW9HZXN0b3IiLCJkZXNjcmlwdGlvbiI6Ikdlc3TDo28gZGUgQXNzZW1ibGVpYXMgZSBDb25ncmVzc29zIiwiaWNvbnMiOlt7InNyYyI6Imh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI5ODMvMjk4MzY5Ni5wbmciLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn0seyJzcmMiOiJodHRwczovL2NRuLmljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI5ODMvMjk4MzY5Ni5wbmciLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn1dLCJzdGFydF91cmwiOiIvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzI1NjNlYiIsIm9yaWVudGF0aW9uIjoicG9ydHJhaXQifQ==" id="manifest-placeholder" />
+  <script>
+    const manifest = {
+      "name": "TeoGestor - Gestão Teocrática",
+      "short_name": "TeoGestor",
+      "description": "Gestão de Assembleias e Congressos",
+      "start_url": window.location.href, // Garante URL absoluta para evitar erro de manifesto
+      "display": "standalone",
+      "background_color": "#ffffff",
+      "theme_color": "#2563eb",
+      "orientation": "portrait",
+      "icons": [
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/2983/2983696.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        },
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/2983/2983696.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ]
+    };
+    const stringManifest = JSON.stringify(manifest);
+    const blob = new Blob([stringManifest], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    document.querySelector('#manifest-placeholder').setAttribute('href', manifestURL);
+  </script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
