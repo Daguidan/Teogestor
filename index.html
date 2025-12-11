@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
 
-    <!-- Cache Control: força o navegador a buscar a versão mais recente -->
+    <!-- Cache Control -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -29,7 +29,6 @@
       .font-serif {
         font-family: "Playfair Display", serif;
       }
-      /* Previne zoom automático em inputs no iOS e melhora a quebra de linha */
       input,
       textarea {
         font-size: 16px !important;
@@ -66,18 +65,19 @@
       }
     </style>
 
-    <!-- PWA Manifest Injection -->
+    <!-- Manifest Placeholder -->
     <link
       rel="manifest"
-      href="data:application/manifest+json;base64,eyJuYW1lIjoiVGVvR2VzdG9yIC0gR2VzdMOjbyBUZW9jcsOhdGljYSIsInNob3J0X25hbWUiOiJUZW9HZXN0b3IiLCJkZXNjcmlwdGlvbiI6Ikdlc3TDo28gZGUgQXNzZW1ibGVpYXMgZSBDb25ncmVzc29zIiwiaWNvbnMiOlt7InNyYyI6Imh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI5ODMvMjk4MzY5Ni5wbmciLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn0seyJzcmMiOiJodHRwczovL2NRuLmljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzI5ODMvMjk4MzY5Ni5wbmciLCJzaXplcyI6IjUxMng1MTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn1dLCJzdGFydF91cmwiOiIvIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzI1NjNlYiIsIm9yaWVudGF0aW9uIjoicG9ydHJhaXQifQ=="
+      href="data:application/manifest+json;base64,AA=="
       id="manifest-placeholder"
     />
+
     <script>
       const manifest = {
         name: "TeoGestor - Gestão Teocrática",
         short_name: "TeoGestor",
         description: "Gestão de Assembleias e Congressos",
-        start_url: window.location.href,
+        start_url: "/",
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#2563eb",
@@ -86,39 +86,29 @@
           {
             src: "https://cdn-icons-png.flaticon.com/512/2983/2983696.png",
             sizes: "192x192",
-            type: "image/png",
+            type: "image/png"
           },
           {
             src: "https://cdn-icons-png.flaticon.com/512/2983/2983696.png",
             sizes: "512x512",
-            type: "image/png",
-          },
-        ],
+            type: "image/png"
+          }
+        ]
       };
+
       const stringManifest = JSON.stringify(manifest);
       const blob = new Blob([stringManifest], { type: "application/json" });
       const manifestURL = URL.createObjectURL(blob);
+
       document
         .querySelector("#manifest-placeholder")
         .setAttribute("href", manifestURL);
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
-    "react/": "https://esm.sh/react@^19.2.1/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
-    "vite": "https://esm.sh/vite@^7.2.7",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1"
-  }
-}
-</script>
-</head>
+  </head>
+
   <body>
     <div id="root"></div>
+    <!-- Caminho correto do seu entrypoint -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
