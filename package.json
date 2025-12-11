@@ -1,13 +1,13 @@
 {
   "name": "teogestor",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "up": "git add . && git commit -m \"Fix Vercel Permission Denied\" && git push"
+    "up": "git add . && git commit -m \"Fix Vercel Build and React Version\" && git push"
   },
   "dependencies": {
     "@google/genai": "*",
@@ -24,6 +24,6 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
-    "vite": "^5.2.10"
+    "vite": "^5.2.11"
   }
 }

@@ -118,6 +118,12 @@ const findDepartmentByName = (org: OrgStructure, deptName: string) => {
 const App: React.FC = () => {
   // --- STATE ---
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  
+  // HOISTED ROLE CHECKS - Defined early to ensure stability
+  const isAdmin = useMemo(() => authSession?.role === 'admin', [authSession]);
+  const isSuperAdmin = useMemo(() => authSession?.isSuperAdmin === true, [authSession]);
+  const isMaster = useMemo(() => authSession?.eventId === 'MASTER', [authSession]);
+
   const [view, setView] = useState<'dashboard' | 'cover' | 'program' | 'organogram' | 'cleaning' | 'general_info' | 'attendants' | 'parking' | 'sharing'>('dashboard');
   
   const [program, setProgram] = useState<AssemblyProgram>(PROGRAM_BETHEL);
@@ -1228,8 +1234,8 @@ const App: React.FC = () => {
   };
 
   const handleCopyPix = () => { navigator.clipboard.writeText("apoio@teogestor.app"); setPixFeedback('Chave Copiada!'); setTimeout(() => setPixFeedback(''), 2000); };
-  const isAdmin = useMemo(() => authSession?.role === 'admin', [authSession]);
-  const isSuperAdmin = useMemo(() => authSession?.isSuperAdmin === true, [authSession]);
+  
+  // LOGIC MOVED TO TOP OF COMPONENT
   const isPublic = useMemo(() => authSession?.role === 'public', [authSession]);
 
   const isConfirmedAttendantOverseer = useMemo(() => {
@@ -1329,7 +1335,7 @@ const App: React.FC = () => {
     ) : (
       <>
         {/* BOTÃO DE CONFIGURAÇÃO DA NUVEM - SEMPRE VISÍVEL PARA ADMIN E MASTER */}
-        {(isAdmin || isSuperAdmin || authSession.eventId === 'MASTER') && (
+        {(isAdmin || isSuperAdmin || isMaster) && (
           <button
             onClick={() => setShowCloudModal(true)}
             className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${
@@ -1347,7 +1353,7 @@ const App: React.FC = () => {
             )}
 
             {/* PONTO VERMELHO APENAS PARA MASTER QUANDO HÁ PROBLEMA / FALTA CONFIGURAÇÃO */}
-            {authSession.eventId === 'MASTER' &&
+            {isMaster &&
               (!cloudUrl || syncStatus === 'error') && (
                 <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />

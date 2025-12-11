@@ -4,16 +4,16 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Carrega variáveis de ambiente baseado no modo (development/production)
-  // O terceiro argumento '' garante que carregue todas as vars, não apenas as com prefixo VITE_
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
     plugins: [react()],
     define: {
-      // Isso substitui "process.env.API_KEY" pelo valor real da variável durante o build
+      // Substituição segura das variáveis específicas
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
-      // Mantém um objeto vazio para outras chamadas genéricas de process.env para evitar erros
-      'process.env': {}
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      // Fallback seguro que não quebra bibliotecas que dependem de process.env
+      'process.env': {} 
     },
     server: {
       watch: {
