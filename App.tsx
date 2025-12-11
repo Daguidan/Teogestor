@@ -1342,7 +1342,7 @@ const App: React.FC = () => {
             <Cloud size={20} />
             {!cloudUrl && <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>}
             {/* INDICADOR VISUAL DE DEBUG PARA O USUÁRIO MASTER */}
-            {authSession.eventId === 'MASTER' && <span className="text-[8px] absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
+            {authSession.eventId === 'MASTER' && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span></span>}
           </button>
         )}
 
