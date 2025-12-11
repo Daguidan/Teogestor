@@ -1,13 +1,13 @@
 {
   "name": "teogestor",
   "private": true,
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "up": "git add . && git commit -m \"Fix Vercel Build and React Version\" && git push"
+    "up": "git add . && git commit -m \"Fix Vercel Cache and Permission\" && git push"
   },
   "dependencies": {
     "@google/genai": "*",
@@ -24,6 +24,6 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.2.2",
-    "vite": "^5.2.11"
+    "vite": "^5.2.12"
   }
 }
