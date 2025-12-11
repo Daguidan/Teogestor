@@ -1325,7 +1325,7 @@ const App: React.FC = () => {
         {(isAdmin || isSuperAdmin || authSession.eventId === 'MASTER') && (
           <button 
             onClick={() => setShowCloudModal(true)} 
-            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-rose-50 text-rose-500 border-rose-200 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200'}`}
+            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-red-50 text-red-500 border-red-200 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200'}`}
             title={cloudUrl ? "Nuvem Conectada (Clique para configurar)" : "Configurar Nuvem"}
           >
             <Cloud size={20} />
