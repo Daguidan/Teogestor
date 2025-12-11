@@ -1332,7 +1332,7 @@ const App: React.FC = () => {
         {(isAdmin || isSuperAdmin || authSession.eventId === 'MASTER') && (
           <button 
             onClick={() => setShowCloudModal(true)} 
-            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm ${
+            className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${
                 cloudUrl 
                 ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200' 
                 : 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 animate-pulse'
@@ -1341,6 +1341,8 @@ const App: React.FC = () => {
           >
             <Cloud size={20} />
             {!cloudUrl && <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>}
+            {/* INDICADOR VISUAL DE DEBUG PARA O USUÁRIO MASTER */}
+            {authSession.eventId === 'MASTER' && <span className="text-[8px] absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
           </button>
         )}
 
