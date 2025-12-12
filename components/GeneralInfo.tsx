@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { OrgStructure, CongregationEntry, AssemblyProgram, EventType } from '../types';
-import { Save, Plus, Trash2, Edit2, Info, Check, User, Phone, Sparkles, X, Lock, Download, Upload, MessageSquare, ArrowLeft, Megaphone } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, Info, Check, User, Phone, Sparkles, X, Lock, Download, Upload, MessageSquare, ArrowLeft, Megaphone, RefreshCcw, AlertTriangle } from 'lucide-react';
 
 interface GeneralInfoProps {
   data: OrgStructure;
@@ -15,6 +15,7 @@ interface GeneralInfoProps {
   currentNotes?: Record<string, string>;
   currentAttendance?: Record<string, string>;
   currentEventType?: EventType | null;
+  onResetProgram?: (type: EventType) => void; // Nova prop
 }
 
 export const GeneralInfo: React.FC<GeneralInfoProps> = ({ 
@@ -26,13 +27,15 @@ export const GeneralInfo: React.FC<GeneralInfoProps> = ({
     currentProgram, 
     currentNotes, 
     currentAttendance,
-    currentEventType
+    currentEventType,
+    onResetProgram
 }) => {
   const [localData, setLocalData] = useState<OrgStructure>(data);
   const [message, setMessage] = useState('');
   const [editingCong, setEditingCong] = useState<CongregationEntry | null>(null);
   const [showModal, setShowModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedResetType, setSelectedResetType] = useState<EventType>(currentEventType || 'CIRCUIT_OVERSEER');
 
   useEffect(() => {
     setLocalData(data);
@@ -174,6 +177,13 @@ export const GeneralInfo: React.FC<GeneralInfoProps> = ({
       setLocalData(prev => ({ ...prev, generalInfo: { ...prev.generalInfo!, suggestions: newSuggestions } }));
   };
 
+  const handleResetClick = () => {
+      if (!onResetProgram) return;
+      if (confirm(`ATENÇÃO: Você tem certeza que deseja forçar o programa para "${selectedResetType}"? Isso irá sobrescrever o programa atual.`)) {
+          onResetProgram(selectedResetType);
+      }
+  };
+
   const congregations = localData.generalInfo?.congregations || [];
   const reminders = localData.generalInfo?.reminders || '';
   const publicAnnouncements = localData.generalInfo?.publicAnnouncements || '';
@@ -254,8 +264,33 @@ export const GeneralInfo: React.FC<GeneralInfoProps> = ({
          </div>
       </div>
 
+      {isAdmin && onResetProgram && (
+          <div className="mt-16 bg-red-50 border border-red-200 rounded-2xl p-6">
+              <h3 className="font-bold text-red-800 mb-4 flex items-center gap-2"><AlertTriangle size={18}/> Configuração Avançada do Evento</h3>
+              <p className="text-sm text-red-700 mb-4">Se o programa exibido estiver incorreto (ex: mostrando Congresso em vez de Assembleia), use esta opção para forçar a correção.</p>
+              
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                  <div className="flex-1 w-full">
+                      <label className="block text-xs font-bold text-red-600 uppercase mb-2">Tipo de Evento Correto</label>
+                      <select 
+                          className="w-full p-3 rounded-xl border border-red-200 text-sm bg-white outline-none focus:ring-2 focus:ring-red-300"
+                          value={selectedResetType}
+                          onChange={(e) => setSelectedResetType(e.target.value as EventType)}
+                      >
+                          <option value="CIRCUIT_OVERSEER">Assembleia com Sup. de Circuito (1 Dia)</option>
+                          <option value="BETHEL_REP">Assembleia com Rep. de Betel (1 Dia)</option>
+                          <option value="REGIONAL_CONVENTION">Congresso Regional (3 Dias)</option>
+                      </select>
+                  </div>
+                  <button onClick={handleResetClick} className="w-full md:w-auto px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2 whitespace-nowrap">
+                      <RefreshCcw size={16}/> Redefinir Programa
+                  </button>
+              </div>
+          </div>
+      )}
+
       {isAdmin && (
-         <div className="mt-16 pt-8 border-t border-slate-200">
+         <div className="mt-8 pt-8 border-t border-slate-200">
              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Lock size={14}/> Migração de Dados (Backup)</h3>
              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center gap-6 justify-between">
                 <div>

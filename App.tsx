@@ -712,6 +712,23 @@ const App: React.FC = () => {
   const handleUpdateAttendance = (id: string, val: string) => { const a = { ...attendance, [id]: val }; setAttendance(a); if (authSession) SecureStorage.setItem(`${authSession.eventId}_attendance`, a); };
   const handleUpdateProgram = (nP: AssemblyProgram) => { if(!nP) return; setProgram(nP); if (authSession) SecureStorage.setItem(`${authSession.eventId}_program_${program.type}`, nP); };
   
+  // FIX: Função para redefinir o programa com base no tipo de evento selecionado
+  const handleResetEventConfig = (newType: EventType) => {
+      let newProg = PROGRAM_BETHEL;
+      if (newType === 'CIRCUIT_OVERSEER') newProg = PROGRAM_CO;
+      if (newType === 'REGIONAL_CONVENTION') newProg = PROGRAM_CONVENTION;
+
+      setProgram(newProg);
+      setSelectedEventType(newType);
+      
+      if (authSession) {
+          SecureStorage.setItem(`${authSession.eventId}_last_event_type`, newType);
+          SecureStorage.setItem(`${authSession.eventId}_program_${newType}`, newProg);
+      }
+      
+      showToast('Programa redefinido para o padrão correto!', 'success');
+  };
+
   const handleCloudConfigSave = async () => { 
       if (!cloudUrl || !cloudKey || !cloudPass) {
           showToast("Por favor, preencha URL, API Key e a Senha de Criptografia.", 'error');
@@ -1655,6 +1672,7 @@ $$;`}
               currentNotes={notes}
               currentAttendance={attendance}
               currentEventType={selectedEventType}
+              onResetProgram={handleResetEventConfig} // PASSA A FUNÇÃO AQUI
           />}
           {view === 'attendants' && (
              <div className="relative">
