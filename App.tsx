@@ -70,7 +70,8 @@ import {
   RefreshCw,
   Download,
   Loader2,
-  Database
+  Database,
+  Info
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -162,6 +163,7 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [copyFeedback, setCopyFeedback] = useState('');
   const [pixFeedback, setPixFeedback] = useState('');
+  const [toastMessage, setToastMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportValue, setReportValue] = useState('');
@@ -178,6 +180,11 @@ const App: React.FC = () => {
   const [isDisambiguationRequired, setIsDisambiguationRequired] = useState(false);
   const [disambiguationPhoneInput, setDisambiguationPhoneInput] = useState('');
   const [confirmedVolunteer, setConfirmedVolunteer] = useState<VolunteerData | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+      setToastMessage({ type, text });
+      setTimeout(() => setToastMessage(null), 4000);
+  };
 
   // --- PRE-LOAD DATA FUNCTION ---
   const preLoadEventData = async (eventId: string) => {
@@ -707,7 +714,7 @@ const App: React.FC = () => {
           if (result.success) {
               setShowCloudModal(false); 
               setSyncStatus('idle'); 
-              alert("✅ Conexão estabelecida com sucesso!"); 
+              showToast("✅ Conexão estabelecida!", 'success');
               // AUTO-REFRESH: Se for SuperAdmin, recarrega a lista de eventos
               if (authSession?.isSuperAdmin) {
                   fetchProviderEvents();
@@ -722,15 +729,26 @@ const App: React.FC = () => {
   };
   
   const handleSync = async (direction: 'up' | 'down') => {
-    if (!authSession) return; setSyncStatus('syncing'); CloudService.configure(cloudUrl, cloudKey, cloudPass);
+    if (!authSession) return; 
+    setSyncStatus('syncing'); 
+    CloudService.configure(cloudUrl, cloudKey, cloudPass);
+    
     if (direction === 'up') {
        const payload = { org: orgData, notes: authSession.isTemplate ? {} : notes, attendance: authSession.isTemplate ? {} : attendance, program, type: selectedEventType, version: APP_CONFIG.APP_VERSION };
        const res = await CloudService.saveEvent(authSession.eventId, payload);
-       if (res.error) { alert(`Erro: ${res.error}`); setSyncStatus('error'); } else setSyncStatus('success');
+       if (res.error) { 
+           showToast(`Erro ao enviar: ${res.error}`, 'error');
+           setSyncStatus('error'); 
+       } else {
+           showToast('Dados salvos na nuvem!', 'success');
+           setSyncStatus('success');
+       }
     } else {
        const res = await CloudService.loadEvent(authSession.eventId);
-       if (res.error) { alert(`Erro: ${res.error}`); setSyncStatus('error'); } 
-       else if (res.data) {
+       if (res.error) { 
+           showToast(`Erro ao baixar: ${res.error}`, 'error');
+           setSyncStatus('error'); 
+       } else if (res.data) {
           if (res.data.type) setSelectedEventType(res.data.type as EventType);
           if (res.data.org) { handleUpdateOrg(res.data.org); }
           if (res.data.program) { handleUpdateProgram(res.data.program); }
@@ -740,8 +758,13 @@ const App: React.FC = () => {
             if (res.data.attendance) { setAttendance(res.data.attendance); SecureStorage.setItem(`${authSession.eventId}_attendance`, res.data.attendance); }
           }
           setSyncStatus('success');
-          if(confirm("Sincronização concluída! Recarregar?")) window.location.reload();
-       } else { alert("Nenhum dado encontrado na nuvem."); setSyncStatus('idle'); }
+          showToast('Dados atualizados da nuvem!', 'success');
+          // Removed auto-reload confirm to avoid blocking UI
+          setTimeout(() => window.location.reload(), 1500);
+       } else { 
+           showToast("Nenhum dado encontrado na nuvem.", 'error');
+           setSyncStatus('idle'); 
+       }
     }
     setTimeout(() => setSyncStatus('idle'), 3000);
   };
@@ -1235,7 +1258,14 @@ $$;`}
       </div>
     </div>
   </div>
-)}</div></div>)
+)}
+{toastMessage && (
+    <div className={`fixed top-24 right-6 px-6 py-4 rounded-2xl shadow-2xl z-[150] animate-bounce-in flex items-center gap-3 font-bold text-sm ${toastMessage.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+        {toastMessage.type === 'success' ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}
+        {toastMessage.text}
+    </div>
+)}
+</div></div>)
   }
   
   if (isRepairingSession) {
@@ -1326,8 +1356,8 @@ $$;`}
         {/* CONTROLES DE SINCRONIZAÇÃO - SÓ SE TIVER URL */}
         {cloudUrl && (isAdmin || isSuperAdmin) && (
            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 ml-1 hidden md:flex">
-              <button onClick={() => handleSync('up')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-brand-600 shadow-sm hover:bg-brand-50 transition-colors border border-slate-100"><Upload size={16}/></button>
-              <button onClick={() => handleSync('down')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-blue-600 shadow-sm hover:bg-blue-50 transition-colors border border-slate-100"><Download size={16}/></button>
+              <button title="Enviar dados para Nuvem (Upload)" onClick={() => handleSync('up')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-brand-600 shadow-sm hover:bg-brand-50 transition-colors border border-slate-100"><Upload size={16}/></button>
+              <button title="Baixar dados da Nuvem (Download)" onClick={() => handleSync('down')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-blue-600 shadow-sm hover:bg-blue-50 transition-colors border border-slate-100"><Download size={16}/></button>
            </div>
         )}
         
@@ -1383,13 +1413,13 @@ $$;`}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Server size={18} /> Eventos Registrados</h3><button onClick={fetchProviderEvents} className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"><RefreshCw size={16}/></button></div>
                       {eventsError ? (
-                          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex flex-col md:flex-row items-center justify-between gap-3">
+                          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex flex-col md:flex-row items-center justify-between gap-3 animate-fade-in">
                               <div className="flex items-center gap-3">
                                 <AlertTriangle size={18} className="shrink-0"/> 
                                 <span>{eventsError}</span>
                               </div>
-                              <button onClick={() => setShowCloudModal(true)} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs">
-                                Configurar Conexão
+                              <button onClick={() => setShowCloudModal(true)} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs flex items-center gap-2 font-extrabold uppercase tracking-wide">
+                                <Settings size={14}/> Configurar Conexão
                               </button>
                           </div>
                       ) : null}
