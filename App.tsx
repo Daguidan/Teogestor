@@ -707,7 +707,11 @@ const App: React.FC = () => {
           if (result.success) {
               setShowCloudModal(false); 
               setSyncStatus('idle'); 
-              alert("✅ Conexão estabelecida com sucesso! A tabela está pronta."); 
+              alert("✅ Conexão estabelecida com sucesso!"); 
+              // AUTO-REFRESH: Se for SuperAdmin, recarrega a lista de eventos
+              if (authSession?.isSuperAdmin) {
+                  fetchProviderEvents();
+              }
           } else {
               alert(`⚠️ Credenciais salvas, mas houve um erro ao conectar: \n\n${result.error}`);
           }
@@ -1379,8 +1383,14 @@ $$;`}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Server size={18} /> Eventos Registrados</h3><button onClick={fetchProviderEvents} className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"><RefreshCw size={16}/></button></div>
                       {eventsError ? (
-                          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex items-center gap-3">
-                              <AlertTriangle size={18}/> {eventsError}
+                          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex flex-col md:flex-row items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <AlertTriangle size={18} className="shrink-0"/> 
+                                <span>{eventsError}</span>
+                              </div>
+                              <button onClick={() => setShowCloudModal(true)} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs">
+                                Configurar Conexão
+                              </button>
                           </div>
                       ) : null}
                       {isLoadingEvents ? <p className="text-center text-slate-400 py-8">Carregando...</p> : (
