@@ -1496,13 +1496,13 @@ $$;`}
                    <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-start gap-4">
                       <div>
                           <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-1">Olá, {authSession.userName}</h2>
-                          <p className="text-white/90 text-sm font-medium">{showPublicDashboard ? 'Bem-vindo ao seu guia digital.' : (isSuperAdmin ? 'Painel do Provedor Master' : `${authSession.isTemplate ? 'Modo de Edição de Modelo' : (selectedEventType === 'REGIONAL_CONVENTION' ? 'Gestão de Congresso' : 'Gestão de Assembleia')}`)}</p>
+                          <p className="text-white/90 text-sm font-medium">{showPublicDashboard ? 'Bem-vindo ao seu guia digital.' : (isSuperAdmin && !authSession.isTemplate ? 'Painel do Provedor Master' : `${authSession.isTemplate ? 'Modo de Edição de Modelo' : (selectedEventType === 'REGIONAL_CONVENTION' ? 'Gestão de Congresso' : 'Gestão de Assembleia')}`)}</p>
                       </div>
                       {showPublicDashboard && ( <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl border border-white/20 w-full md:w-56 shrink-0 mt-2 md:mt-0"><label className="block text-[10px] font-bold text-white/80 mb-1.5 uppercase tracking-wider">Sua Congregação</label><div className="relative group"><select className="w-full p-2 rounded-lg border border-white/30 bg-transparent text-sm font-bold text-white outline-none appearance-none cursor-pointer" value={selectedUserCongId} onChange={(e) => handleCongregationSelect(e.target.value)}><option value="" style={{ color: 'black' }}>-- Ver designações --</option>{(orgData.generalInfo?.congregations || []).map(c => <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>)}</select><div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/80"><ChevronDown size={18}/></div></div></div> )}
                    </div>
                 </div>
                 
-                {isSuperAdmin ? (
+                {isSuperAdmin && !authSession.isTemplate ? (
                   <div className="space-y-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><Plus size={18} /> Criar Novo Evento</h3>
