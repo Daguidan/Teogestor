@@ -160,7 +160,7 @@ const App: React.FC = () => {
   const [eventsError, setEventsError] = useState('');
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [providerNewEventId, setProviderNewEventId] = useState('');
-  const [providerNewEventType, setProviderNewEventType] = useState<'ASSEMBLY' | 'CONVENTION'>('ASSEMBLY');
+  const [providerNewEventType, setProviderNewEventType] = useState<EventType>('BETHEL_REP');
   
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [copyFeedback, setCopyFeedback] = useState('');
@@ -919,10 +919,20 @@ const App: React.FC = () => {
         if (!confirm(`O evento "${newEventId}" já existe. Gerar novo link?`)) {
           setIsCreatingEvent(false); setCopyFeedback(''); return;
         }
-        handleGenerateInvite(newEventId, 'provider', providerNewEventType); return;
+        // Determina o tipo de gestão para o link existente
+        const mgmtType = providerNewEventType === 'REGIONAL_CONVENTION' ? 'CONVENTION' : 'ASSEMBLY';
+        handleGenerateInvite(newEventId, 'provider', mgmtType); 
+        return;
       }
       
-      let templateId: string = providerNewEventType === 'CONVENTION' ? TEMPLATE_EVENT_IDS.CONVENTION_REGIONAL : TEMPLATE_EVENT_IDS.ASSEMBLY_BETHEL;
+      let templateId: string;
+      if (providerNewEventType === 'REGIONAL_CONVENTION') {
+          templateId = TEMPLATE_EVENT_IDS.CONVENTION_REGIONAL;
+      } else if (providerNewEventType === 'CIRCUIT_OVERSEER') {
+          templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_CO;
+      } else {
+          templateId = TEMPLATE_EVENT_IDS.ASSEMBLY_BETHEL;
+      }
   
       const templateRes = await CloudService.loadEvent(templateId);
 
@@ -935,7 +945,9 @@ const App: React.FC = () => {
       const saveRes = await CloudService.saveEvent(newEventId, templateRes.data);
       if (saveRes.error) throw new Error(saveRes.error);
       
-      handleGenerateInvite(newEventId, 'provider', providerNewEventType);
+      // Gera o link correto
+      const mgmtType = providerNewEventType === 'REGIONAL_CONVENTION' ? 'CONVENTION' : 'ASSEMBLY';
+      handleGenerateInvite(newEventId, 'provider', mgmtType);
       
     } catch (error) {
       alert(`Falha: ${error instanceof Error ? error.message : 'Erro'}`);
@@ -1508,9 +1520,10 @@ $$;`}
                       <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><Plus size={18} /> Criar Novo Evento</h3>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <input className="flex-1 px-4 py-3 text-sm border border-slate-200 bg-slate-50 rounded-xl outline-none shadow-sm focus:ring-1 focus:ring-brand-400 font-mono uppercase" placeholder="ID do Evento (ex: SP-123-A)" value={providerNewEventId} onChange={e => setProviderNewEventId(e.target.value)} />
-                        <select className="px-4 py-3 text-sm border border-slate-200 bg-slate-50 rounded-xl outline-none shadow-sm focus:ring-1 focus:ring-brand-400 font-bold" value={providerNewEventType} onChange={e => setProviderNewEventType(e.target.value as any)}>
-                          <option value="ASSEMBLY">Assembleia</option>
-                          <option value="CONVENTION">Congresso</option>
+                        <select className="px-4 py-3 text-sm border border-slate-200 bg-slate-50 rounded-xl outline-none shadow-sm focus:ring-1 focus:ring-brand-400 font-bold" value={providerNewEventType} onChange={e => setProviderNewEventType(e.target.value as EventType)}>
+                          <option value="BETHEL_REP">Assembleia (Rep. Betel)</option>
+                          <option value="CIRCUIT_OVERSEER">Assembleia (Sup. Circuito)</option>
+                          <option value="REGIONAL_CONVENTION">Congresso</option>
                         </select>
                         <button onClick={handleCreateEventAndGenerateLink} disabled={!providerNewEventId || isCreatingEvent} className="bg-brand-600 text-white px-5 py-3 rounded-xl text-xs font-bold shadow-md hover:bg-brand-700 disabled:opacity-50 flex items-center justify-center gap-2"><LinkIcon size={14}/> Gerar Link Admin</button>
                       </div>
