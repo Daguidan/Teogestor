@@ -94,7 +94,6 @@ const normalizePhone = (phone: string): string => {
     return phone.replace(/\D/g, ''); // Remove all non-digit characters
 };
 
-// FIX: Relaxed empty check. Event is NOT empty if it has congregations, even if committee is null.
 const isOrgEmpty = (org: OrgStructure | null) => {
     if (!org) return true;
     const hasCommittee = org.committee && Object.values(org.committee).some(v => v !== null);
@@ -1578,12 +1577,12 @@ $$;`}
 
                      {/* PROGRAMA E NOTAS */}
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
+                        <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
                             <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-500 group-hover:scale-110 transition-transform"><BookOpen size={32}/></div>
                             <h3 className="font-bold text-slate-800">Programa e Anotações</h3>
                             <p className="text-xs text-slate-500">Acompanhe os discursos e faça suas anotações pessoais.</p>
                         </button>
-                        <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
+                        <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
                             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={32}/></div>
                             <h3 className="font-bold text-slate-800">Informações Gerais</h3>
                             <p className="text-xs text-slate-500">Lembretes, locais de limpeza e contatos.</p>
@@ -1614,7 +1613,7 @@ $$;`}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                      <button onClick={() => setView('cover')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform"><Layout size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Capa do Evento</h3></button>
                      <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><BookOpen size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Programa</h3></button>
-                     <button onClick={() => { setOrganogramPinInput(''); setShowOrganogramPinModal(true); }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
+                     <button onClick={() => { if(isAdmin) { setView('organogram'); } else { setOrganogramPinInput(''); setShowOrganogramPinModal(true); } }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
                      <button onClick={() => setView('cleaning')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform"><Sparkles size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Limpeza e Fichas</h3></button>
                      <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Geral e Contatos</h3></button>
                      <button onClick={() => setView('attendants')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Indicadores</h3></button>
