@@ -979,10 +979,41 @@ const App: React.FC = () => {
     return !!(overseer && normalizeString(overseer.name) === normalizeString(confirmedVolunteer.name));
   }, [authSession, confirmedVolunteer, orgData]);
   
+  // Define os encarregados confirmados que têm permissão de editar
   const isAttendantOverseer = authSession?.departmentAccess === 'attendants' || isConfirmedAttendantOverseer;
   const isParkingOverseer = authSession?.departmentAccess === 'parking' || isConfirmedParkingOverseer;
 
   const showPublicDashboard = isPublic && !isAttendantOverseer && !isParkingOverseer;
+
+  // Identify which departments the current volunteer oversees
+  const myOverseerDepartments = useMemo(() => {
+      if (!confirmedVolunteer) return [];
+      const depts: string[] = [];
+      const normalizedPhone = normalizePhone(confirmedVolunteer.phone);
+      
+      const checkDept = (list: any[]) => {
+          list.forEach(d => {
+              if (d.overseer && normalizePhone(d.overseer.phone) === normalizedPhone) {
+                  depts.push(d.name);
+              }
+          });
+      };
+      
+      checkDept(orgData.aoDepartments || []);
+      checkDept(orgData.aaoDepartments || []);
+      checkDept(orgData.coordDepartments || []);
+      checkDept(orgData.progDepartments || []);
+      checkDept(orgData.roomDepartments || []);
+      
+      return depts;
+  }, [confirmedVolunteer, orgData]);
+
+  const hasOverseerPrivileges = myOverseerDepartments.length > 0;
+  
+  // Calculate unread suggestions count
+  const unreadSuggestionsCount = useMemo(() => {
+      return orgData.generalInfo?.suggestions?.length || 0;
+  }, [orgData.generalInfo?.suggestions]);
 
   const handleUpdateOrg = (newOrg: OrgStructure) => {
     setOrgData(newOrg);
@@ -1510,7 +1541,11 @@ $$;`}
                           <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-1">Olá, {authSession.userName}</h2>
                           <p className="text-white/90 text-sm font-medium">{showPublicDashboard ? 'Bem-vindo ao seu guia digital.' : (isSuperAdmin && !authSession.isTemplate ? 'Painel do Provedor Master' : `${authSession.isTemplate ? 'Modo de Edição de Modelo' : (selectedEventType === 'REGIONAL_CONVENTION' ? 'Gestão de Congresso' : 'Gestão de Assembleia')}`)}</p>
                       </div>
-                      {showPublicDashboard && ( <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl border border-white/20 w-full md:w-56 shrink-0 mt-2 md:mt-0"><label className="block text-[10px] font-bold text-white/80 mb-1.5 uppercase tracking-wider">Sua Congregação</label><div className="relative group"><select className="w-full p-2 rounded-lg border border-white/30 bg-transparent text-sm font-bold text-white outline-none appearance-none cursor-pointer" value={selectedUserCongId} onChange={(e) => handleCongregationSelect(e.target.value)}><option value="" style={{ color: 'black' }}>-- Ver designações --</option>{(orgData.generalInfo?.congregations || []).map(c => <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>)}</select><div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/80"><ChevronDown size={18}/></div></div></div> )}
+                      {showPublicDashboard && ( <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl border border-white/20 w-full md:w-56 shrink-0 mt-2 md:mt-0"><label className="block text-[10px] font-bold text-white/80 mb-1.5 uppercase tracking-wider">Sua Congregação</label><div className="relative group"><select className="w-full p-2 rounded-lg border border-white/30 bg-transparent text-sm font-bold text-white outline-none appearance-none cursor-pointer" value={selectedUserCongId} onChange={(e) => handleCongregationSelect(e.target.value)}><option value="" style={{ color: 'black' }}>-- Ver designações --</option>{(orgData.generalInfo?.congregations || []).map(c => <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>)}</select><div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/80"><ChevronDown size={18}/></div></div>
+                        {(!orgData.generalInfo?.congregations || orgData.generalInfo.congregations.length === 0) && (
+                            <p className="text-[9px] text-white/60 mt-1 italic">Nenhuma congregação cadastrada.</p>
+                        )}
+                      </div> )}
                    </div>
                 </div>
                 
@@ -1608,6 +1643,35 @@ $$;`}
                                  <button onClick={() => { setConfirmedVolunteer(null); setIsDisambiguationRequired(true); }} className="ml-auto text-xs text-red-400 hover:text-red-600 font-bold border border-red-100 px-3 py-1.5 rounded-lg hover:bg-red-50">Sair</button>
                              </div>
 
+                             {/* SE FOR ENCARREGADO (Indicadores ou Estacionamento), MOSTRA BOTÕES DE GESTÃO */}
+                             {(isConfirmedAttendantOverseer || isConfirmedParkingOverseer) && (
+                                 <div className="grid grid-cols-2 gap-3 animate-fade-in">
+                                     <button
+                                         onClick={() => setView(isConfirmedAttendantOverseer ? 'attendants' : 'parking')}
+                                         className="p-4 bg-white border-2 border-indigo-100 rounded-2xl flex flex-col items-center gap-2 shadow-sm hover:border-indigo-300 transition-all group"
+                                     >
+                                         <div className="bg-indigo-100 p-3 rounded-full text-indigo-600 group-hover:scale-110 transition-transform">
+                                             {isConfirmedAttendantOverseer ? <Users size={24} /> : <Car size={24} />}
+                                         </div>
+                                         <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wide text-center">
+                                             Gerenciar Equipe
+                                         </span>
+                                     </button>
+
+                                     <button
+                                         onClick={() => { setOrganogramPinInput(''); setShowOrganogramPinModal(true); }}
+                                         className="p-4 bg-white border-2 border-slate-100 rounded-2xl flex flex-col items-center gap-2 shadow-sm hover:border-slate-300 transition-all group"
+                                     >
+                                         <div className="bg-slate-100 p-3 rounded-full text-slate-600 group-hover:scale-110 transition-transform">
+                                             <Grid size={24} />
+                                         </div>
+                                         <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-wide text-center">
+                                             Ver Organograma
+                                         </span>
+                                     </button>
+                                 </div>
+                             )}
+
                              {hasOrganogramRole && (
                                  <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl shadow-sm">
                                      <h3 className="text-indigo-900 font-bold mb-4 flex items-center gap-2"><Briefcase size={20}/> Suas Designações</h3>
@@ -1619,6 +1683,15 @@ $$;`}
                                              </div>
                                          ))}
                                      </div>
+                                     {/* Botão de Organograma para quem está no organograma mas não é encarregado principal de depto externo */}
+                                     {!isConfirmedAttendantOverseer && !isConfirmedParkingOverseer && (
+                                         <button 
+                                            onClick={() => { setOrganogramPinInput(''); setShowOrganogramPinModal(true); }} 
+                                            className="w-full mt-4 py-3 bg-white border border-indigo-200 text-indigo-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 shadow-sm transition-all"
+                                         >
+                                             <Lock size={14}/> Acessar Área Restrita (Organograma)
+                                         </button>
+                                     )}
                                  </div>
                              )}
 
@@ -1691,9 +1764,17 @@ $$;`}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                      <button onClick={() => setView('cover')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform"><Layout size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Capa do Evento</h3></button>
                      <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><BookOpen size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Programa</h3></button>
-                     <button onClick={() => { if(isAdmin) { setView('organogram'); } else { setOrganogramPinInput(''); setShowOrganogramPinModal(true); } }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
+                     <button onClick={() => { if(isAdmin || hasOverseerPrivileges) { setView('organogram'); } else { setOrganogramPinInput(''); setShowOrganogramPinModal(true); } }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
                      <button onClick={() => setView('cleaning')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform"><Sparkles size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Limpeza e Fichas</h3></button>
-                     <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Geral e Contatos</h3></button>
+                     <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group relative overflow-hidden">
+                        <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={28}/></div>
+                        <h3 className="font-bold text-slate-800 text-sm">Geral e Contatos</h3>
+                        {unreadSuggestionsCount > 0 && isAdmin && (
+                            <div className="absolute top-4 right-4 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md animate-pulse">
+                                {unreadSuggestionsCount}
+                            </div>
+                        )}
+                     </button>
                      <button onClick={() => setView('attendants')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Indicadores</h3></button>
                      <button onClick={() => setView('parking')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center text-sky-500 group-hover:scale-110 transition-transform"><Car size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Estacionamento</h3></button>
                      <button onClick={() => setView('sharing')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 group-hover:scale-110 transition-transform"><Share2 size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Compartilhar</h3></button>
@@ -1729,6 +1810,7 @@ $$;`}
                   eventType={selectedEventType}
                   isAttendantOverseer={isAttendantOverseer}
                   isParkingOverseer={isParkingOverseer}
+                  allowedDepartments={hasOverseerPrivileges ? myOverseerDepartments : []} 
                 />
              </div>
           )}
@@ -1749,18 +1831,18 @@ $$;`}
               currentNotes={notes}
               currentAttendance={attendance}
               currentEventType={selectedEventType}
-              onResetProgram={handleResetEventConfig} // PASSA A FUNÇÃO AQUI
+              onResetProgram={handleResetEventConfig} 
           />}
           {view === 'attendants' && (
              <div className="relative">
                 <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
-                <AttendantManager data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />
+                <AttendantManager data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin || isAttendantOverseer} />
              </div>
           )}
           {view === 'parking' && (
              <div className="relative">
                 <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
-                <ParkingManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />
+                <ParkingManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin || isParkingOverseer} />
              </div>
           )}
           {view === 'sharing' && <SharingCenter eventId={authSession.eventId} onBack={() => setView('dashboard')} cloudUrl={cloudUrl} cloudKey={cloudKey} cloudPass={cloudPass} orgData={orgData} />}
