@@ -73,7 +73,8 @@ import {
   Database,
   Info,
   MapPin,
-  Check
+  Check,
+  Building2
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -114,7 +115,7 @@ const findDepartmentByName = (org: OrgStructure, deptName: string) => {
   return allDepts.find(d => d.name === deptName);
 };
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   // --- STATE ---
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   
@@ -1562,8 +1563,45 @@ $$;`}
                    </div>
                 </div>
                 
+                {/* --- MODAL DE SELEÇÃO OBRIGATÓRIA PARA VISITANTES --- */}
+                {showPublicDashboard && !selectedUserCongId && orgData.generalInfo?.congregations && orgData.generalInfo.congregations.length > 0 && (
+                    <div className="fixed inset-0 z-[60] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                        <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl relative overflow-hidden border border-white/20">
+                            <div className="text-center mb-6">
+                                <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-100 shadow-sm">
+                                    <Building2 size={32}/>
+                                </div>
+                                <h2 className="text-2xl font-extrabold text-slate-800">Bem-vindo! 👋</h2>
+                                <p className="text-slate-500 text-sm mt-2">Para ver as designações de limpeza e contas, selecione sua congregação:</p>
+                            </div>
+
+                            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 -mr-2 custom-scrollbar">
+                                {orgData.generalInfo.congregations.map(cong => (
+                                    <button
+                                        key={cong.id}
+                                        onClick={() => handleCongregationSelect(cong.id)}
+                                        className="w-full p-4 rounded-xl border-2 border-slate-100 hover:border-brand-500 hover:bg-brand-50 transition-all flex items-center justify-between group active:scale-[0.98]"
+                                    >
+                                        <span className="font-bold text-slate-700 group-hover:text-brand-700 text-left">{cong.name}</span>
+                                        <div className="w-6 h-6 rounded-full border-2 border-slate-200 group-hover:border-brand-500 group-hover:bg-brand-500 flex items-center justify-center transition-colors">
+                                            <Check size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+                                <button onClick={() => { /* Opção para quem não é de nenhuma */ handleCongregationSelect('VISITOR_GUEST'); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 uppercase tracking-wider">
+                                    Sou Visitante (Apenas assistir)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
                 {isSuperAdmin && !authSession.isTemplate ? (
                   <div className="space-y-6">
+                    {/* ... (Existing SuperAdmin content) ... */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><Plus size={18} /> Criar Novo Evento</h3>
                       <div className="flex flex-col sm:flex-row gap-3">
@@ -1922,5 +1960,3 @@ $$;`}
     </div>
   );
 };
-
-export default App;
