@@ -8,23 +8,37 @@ import { CloudConfig } from '../types';
 const CLOUD_URL_KEY = 'teogestor_cloud_url';
 const CLOUD_KEY_KEY = 'teogestor_cloud_key';
 const CLOUD_PASS_KEY = 'teogestor_cloud_pass'; // Senha de criptografia local
-const TABLE_NAME = 'evento'; // NOME DA TABELA CENTRALIZADO (CORRIGIDO PARA SINGULAR)
+const TABLE_NAME = 'evento'; // NOME DA TABELA CENTRALIZADO
 
 let supabase: SupabaseClient | null = null;
 let encryptionPassword = '';
 
-// Helper para limpar URL
+// Helper para limpar e corrigir URL
 const cleanUrl = (url: string) => {
     if (!url) return '';
     let cleaned = url.trim();
-    // Garante https:// se não tiver
+    
+    // CASO 1: Usuário colou a URL do Dashboard (Erro comum)
+    // Ex: https://supabase.com/dashboard/project/abcdefghijklm
+    const dashboardMatch = cleaned.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/);
+    if (dashboardMatch && dashboardMatch[1]) {
+        return `https://${dashboardMatch[1]}.supabase.co`;
+    }
+
+    // CASO 2: Usuário colou apenas o Project ID (ex: kckyrfuczbhifvuwnfnh)
+    // IDs do Supabase geralmente têm 20 caracteres alfanuméricos
+    if (/^[a-z0-9]{20}$/.test(cleaned)) {
+        return `https://${cleaned}.supabase.co`;
+    }
+
+    // CASO 3: Normalização padrão
     if (!cleaned.startsWith('http')) {
         cleaned = `https://${cleaned}`;
     }
-    // Remove barra no final se tiver
     if (cleaned.endsWith('/')) {
         cleaned = cleaned.slice(0, -1);
     }
+    
     return cleaned;
 };
 
@@ -99,7 +113,7 @@ export const CloudService = {
         
         if (error) {
             if (error.code === '42P01') { // Código PostgreSQL para "tabela não existe"
-                return { success: false, error: 'A tabela "evento" não existe. Crie-a no SQL Editor do Supabase.' };
+                return { success: false, error: 'A tabela "evento" não existe. Verifique o Script SQL.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
@@ -107,7 +121,7 @@ export const CloudService = {
     } catch (e: any) {
         const msg = e.message || '';
         if (msg.includes('Failed to fetch')) {
-             return { success: false, error: 'Falha na conexão (Failed to fetch). Verifique se a URL do projeto está correta (sem espaços) e se o projeto no Supabase não está pausado.' };
+             return { success: false, error: 'Falha na conexão (Failed to fetch). A URL parece incorreta ou bloqueada.' };
         }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }

@@ -69,7 +69,8 @@ import {
   Upload,
   RefreshCw,
   Download,
-  Loader2
+  Loader2,
+  Database
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -149,6 +150,7 @@ const App: React.FC = () => {
   const [cloudKey, setCloudKey] = useState('');
   const [cloudPass, setCloudPass] = useState('');
   const [isTestingCloud, setIsTestingCloud] = useState(false);
+  const [showSqlHelp, setShowSqlHelp] = useState(false);
   
   const [providerEventList, setProviderEventList] = useState<ProviderEventInfo[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -1186,14 +1188,46 @@ const App: React.FC = () => {
         </p>
       </div>
 
+      {showSqlHelp && (
+          <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative">
+              <button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button>
+              <p className="text-slate-400 mb-2 border-b border-slate-700 pb-2">Copie e cole no SQL Editor do Supabase:</p>
+              <pre className="whitespace-pre-wrap select-all">
+{`-- Cria a tabela APENAS se não existir
+create table if not exists evento (
+  id text primary key,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  data jsonb
+);
+
+-- Habilita segurança (boa prática)
+alter table evento enable row level security;
+
+-- Permite acesso total para anon (controle feito pelo App via senha)
+do $$
+begin
+  if not exists (select 1 from pg_policies where tablename = 'evento' and policyname = 'Acesso Publico') then
+    create policy "Acesso Publico" on evento for all using (true) with check (true);
+  end if;
+end
+$$;`}
+              </pre>
+          </div>
+      )}
+
       <div className="space-y-2 pt-2">
         <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
             {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : null}
             {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
         </button>
-        <button onClick={() => setShowCloudModal(false)} disabled={isTestingCloud} className="w-full py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">
-            Cancelar
-        </button>
+        <div className="flex gap-2">
+            <button onClick={() => setShowSqlHelp(!showSqlHelp)} className="flex-1 py-3 text-brand-600 bg-brand-50 border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-100 flex items-center justify-center gap-1">
+                <Database size={14}/> Script SQL
+            </button>
+            <button onClick={() => setShowCloudModal(false)} disabled={isTestingCloud} className="flex-1 py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">
+                Cancelar
+            </button>
+        </div>
       </div>
     </div>
   </div>
