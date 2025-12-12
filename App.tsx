@@ -71,7 +71,9 @@ import {
   Download,
   Loader2,
   Database,
-  Info
+  Info,
+  MapPin,
+  Check
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -188,6 +190,9 @@ const App: React.FC = () => {
   };
 
   const handleOpenCloudModal = () => {
+      // Clear previous connection errors when opening the modal to reduce confusion
+      setEventsError('');
+      
       const config = CloudService.getConfig();
       if (config) {
           setCloudUrl(config.url);
@@ -725,21 +730,26 @@ const App: React.FC = () => {
           if (result.success) {
               setShowCloudModal(false); 
               setSyncStatus('idle'); 
+              // Clear previous connection errors
+              setEventsError('');
               showToast("✅ Conexão estabelecida!", 'success');
               // AUTO-REFRESH: Se for SuperAdmin, recarrega a lista de eventos
               if (authSession?.isSuperAdmin) {
                   fetchProviderEvents();
               }
           } else {
-              showToast(`⚠️ Erro ao conectar: ${result.error}`, 'error');
+              // Ensure error message is shown clearly
+              const errorMsg = result.error || 'Erro desconhecido';
+              showToast(`⚠️ ${errorMsg}`, 'error');
+              
               // Se o erro for de tabela inexistente (42P01), abre a ajuda automaticamente
-              if (result.error && (result.error.includes('tabela') || result.error.includes('42P01'))) {
+              if (errorMsg.includes('tabela') || errorMsg.includes('42P01')) {
                   setShowSqlHelp(true);
               }
           }
       } else {
           setIsTestingCloud(false);
-          showToast("Erro ao salvar configuração.", 'error'); 
+          showToast("Erro ao salvar configuração local.", 'error'); 
       }
   };
   
@@ -1460,136 +1470,264 @@ $$;`}
                   </div>
                 ) : showPublicDashboard ? (
                   <div className="space-y-6">
-                    
-                    {publicAnnouncements && selectedUserCongId && (
-                      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-amber-200/80 animate-fade-in">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="bg-amber-100 text-amber-600 p-2 rounded-full"><Megaphone size={20}/></div>
-                          <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Quadro de Anúncios</h3>
-                        </div>
-                        <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{publicAnnouncements}</p>
-                      </div>
-                    )}
-                    
-                    <button onClick={() => setView('program')} className="w-full bg-white/80 backdrop-blur-sm p-6 rounded-[2rem] shadow-sm border border-white/60 hover:shadow-xl hover:-translate-y-1 transition-all flex flex-row items-center gap-6 group relative overflow-hidden h-[120px]">
-                      <div className="bg-purple-50 text-purple-600 p-4 rounded-2xl group-hover:scale-110 transition-transform shadow-inner relative z-10"><Grid size={32} /></div>
-                      <div className="text-left flex-1 relative z-10">
-                        <h3 className="font-bold text-lg text-slate-800 mb-1">Programação / Anotações</h3>
-                        <p className="text-xs text-slate-500 leading-relaxed font-medium">Acesse o cronograma e faça suas anotações.</p>
-                      </div>
-                    </button>
-                    
-                    {isDisambiguationRequired && (
-                        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-amber-200 animate-fade-in">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="bg-amber-100 text-amber-600 p-2 rounded-full"><UserCheck size={20}/></div>
-                                <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Confirme sua Identidade</h3>
-                            </div>
-                            <p className="text-xs text-slate-500 mb-4 leading-relaxed">Para proteger a privacidade da equipe, digite seu telefone para ver suas designações.</p>
-                            <div className="flex gap-2">
+                     {/* ANUNCIOS PÚBLICOS - SE HOUVER */}
+                     {publicAnnouncements && (
+                         <div className="bg-blue-50 border border-blue-100 p-6 rounded-3xl shadow-sm animate-fade-in relative overflow-hidden">
+                             <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
+                             <h3 className="text-blue-900 font-bold flex items-center gap-2 mb-3"><Megaphone size={20}/> Avisos Importantes</h3>
+                             <p className="text-blue-800 text-sm leading-relaxed whitespace-pre-wrap">{publicAnnouncements}</p>
+                         </div>
+                     )}
+
+                     {/* DESIGNAÇÕES PESSOAIS */}
+                     {isDisambiguationRequired && (
+                         <div className="bg-amber-50 border border-amber-200 p-6 rounded-3xl shadow-sm animate-fade-in">
+                             <h3 className="text-amber-800 font-bold mb-3 flex items-center gap-2"><UserCheck size={20}/> Confirme sua Identidade</h3>
+                             <p className="text-sm text-amber-700 mb-4">Para ver suas designações específicas nesta congregação, por favor confirme seu telefone cadastrado (apenas números).</p>
+                             <div className="flex gap-2 relative">
                                 <div className="relative flex-1">
                                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16}/>
-                                    <input type="tel" inputMode="numeric" className="w-full p-3 pl-10 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all font-mono" placeholder="Seu telefone" value={disambiguationPhoneInput} onChange={(e) => setDisambiguationPhoneInput(e.target.value)} />
-                                </div>
-                                <button onClick={handleDisambiguationSubmit} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-bold hover:bg-slate-700 transition-colors shadow-sm">Verificar</button>
-                            </div>
-                        </div>
-                    )}
+                                    <input 
+                                        type="tel" 
+                                        placeholder="DDD + Número (Ex: 11999998888)" 
+                                        className="w-full p-3 pl-10 rounded-xl border border-amber-300 text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                                        value={disambiguationPhoneInput}
+                                        onChange={(e) => setDisambiguationPhoneInput(e.target.value)}
+                                    />
+                                 </div>
+                                 <button onClick={handleDisambiguationSubmit} className="bg-amber-600 text-white px-6 rounded-xl font-bold text-sm shadow-md hover:bg-amber-700">Confirmar</button>
+                             </div>
+                         </div>
+                     )}
+                     
+                     {confirmedVolunteer && (
+                         <div className="space-y-4">
+                             {/* CARTÃO DE IDENTIFICAÇÃO DO VOLUNTÁRIO */}
+                             <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex items-center gap-4">
+                                 <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center font-bold text-xl shadow-inner">
+                                     {confirmedVolunteer.name.charAt(0)}
+                                 </div>
+                                 <div>
+                                     <h3 className="font-bold text-slate-800 text-lg">{confirmedVolunteer.name}</h3>
+                                     <p className="text-xs text-slate-500 font-medium flex items-center gap-1"><MapPin size={12}/> {selectedCong?.name}</p>
+                                 </div>
+                                 <button onClick={() => { setConfirmedVolunteer(null); setIsDisambiguationRequired(true); }} className="ml-auto text-xs text-red-400 hover:text-red-600 font-bold border border-red-100 px-3 py-1.5 rounded-lg hover:bg-red-50">Sair</button>
+                             </div>
 
-                    {selectedUserCongId && (
-                        <div className="space-y-6 animate-fade-in">
-                            {( (selectedCong && selectedCong.cleaningAssignment) || confirmedVolunteer ) && (
-                                <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-blue-100 relative overflow-hidden">
-                                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100"><UserCheck size={18} className="text-brand-600"/><h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Suas Designações</h3></div>
-                                    <div className="space-y-2">
-                                        {selectedCong && selectedCong.cleaningAssignment && (
-                                            <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg shrink-0"><Sparkles size={16}/></div>
-                                                    <div>
-                                                        <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wide mb-0.5">Limpeza ({selectedCong.name})</p>
-                                                        <p className="text-sm font-bold text-slate-800">{selectedCong.cleaningAssignment}</p>
-                                                        <p className="text-[10px] text-slate-500 mt-1">Responsável: <span className="font-bold">{selectedCong.cleaningResponsable || 'Não informado'}</span></p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {confirmedVolunteer && (
-                                            <>
-                                                {myAttendantAssignments.map((assign, idx) => (<div key={`${assign.sectorId}_${idx}`} className="bg-orange-50/50 p-3 rounded-xl border border-orange-100"><div className="flex items-start gap-3 mb-2"><div className="bg-orange-100 text-orange-600 p-1.5 rounded-lg shrink-0"><Users size={16}/></div><div><p className="text-[9px] font-bold text-orange-600 uppercase tracking-wide mb-0.5">Indicador:</p><p className="text-sm font-bold text-slate-800">{assign.customName || DEFAULT_SECTORS.find(s => s.id === assign.sectorId)?.name || 'Setor'}</p><span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded mt-1 inline-block ${assign.period === 'Manhã' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{assign.period}</span></div></div>{assign.canReport && (<button onClick={() => openReportModal(assign.sectorId, assign.rawPeriod)} className="w-full py-2 bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors shadow-sm"><Send size={12}/> Reportar Assistência</button>)}</div>))}
-                                                {myOrganogramAssignments.map((assign, idx) => (<div key={idx} className="bg-blue-50/50 p-3 rounded-xl border border-blue-100"><p className="text-[9px] font-bold text-blue-600 uppercase tracking-wide mb-0.5">{assign.dept}</p><p className="text-sm font-bold text-slate-800">{assign.role}</p></div>))}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                             {hasOrganogramRole && (
+                                 <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl shadow-sm">
+                                     <h3 className="text-indigo-900 font-bold mb-4 flex items-center gap-2"><Briefcase size={20}/> Suas Designações</h3>
+                                     <div className="space-y-2">
+                                         {myOrganogramAssignments.map((assign, idx) => (
+                                             <div key={idx} className="bg-white p-3 rounded-xl border border-indigo-100 flex justify-between items-center">
+                                                 <span className="text-sm font-bold text-slate-700">{assign.dept}</span>
+                                                 <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded">{assign.role}</span>
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
 
-                            {hasOrganogramRole && (
-                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
-                                    <div className="flex items-center gap-3 mb-3"><div className="bg-slate-100 text-slate-600 p-2 rounded-full"><Layout size={20}/></div><h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wide">Organograma da Equipe</h3></div>
-                                    <p className="text-xs text-slate-500 mb-4 leading-relaxed">Visualize a estrutura de voluntários do evento. É necessário o PIN de acesso dos voluntários.</p>
-                                    <button onClick={() => setShowOrganogramPinModal(true)} className="w-full py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors shadow-sm"><Lock size={12}/> Visualizar Organograma</button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-[2rem] shadow-sm border border-emerald-100 p-5 flex flex-col items-center text-center relative overflow-hidden group hover:shadow-md transition-all"><div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div><div className="bg-emerald-50 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform"><Heart size={24} className="text-emerald-600 fill-emerald-600"/></div><h3 className="font-bold text-slate-800 text-base mb-1">Donativos para a Obra Mundial</h3><p className="text-xs text-slate-500 mb-4 max-w-xs">Apoie os eventos e a obra mundial das Testemunhas de Jeová através do site oficial.</p><a href="https://donate.jw.org/pt/BRA/home" target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">Acessar donate.jw.org <span className="text-emerald-200">↗</span></a></div>
-                        <div className="text-center px-2 pt-4 border-t border-slate-200/50"><p className="text-[9px] text-slate-400 mb-2 font-medium">Gostou do App? Contribua voluntariamente:</p><button onClick={handleCopyPix} className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-[9px] font-bold hover:bg-white hover:text-slate-700 transition-all shadow-sm w-full justify-center"><Copy size={10}/> {pixFeedback || "Copiar Chave Pix (App)"}</button></div>
-                    </div>
+                             {myAttendantAssignments.length > 0 && (
+                                 <div className="bg-orange-50 border border-orange-100 p-6 rounded-3xl shadow-sm">
+                                     <h3 className="text-orange-900 font-bold mb-4 flex items-center gap-2"><Users size={20}/> Indicadores - Seus Postos</h3>
+                                     <div className="space-y-3">
+                                         {myAttendantAssignments.map((assign, idx) => (
+                                             <div key={idx} className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm">
+                                                 <div className="flex justify-between items-start mb-2">
+                                                     <h4 className="font-bold text-slate-800">
+                                                         {assign.customName || DEFAULT_SECTORS.find(s => s.id === assign.sectorId)?.name || `Setor ${assign.sectorId}`}
+                                                     </h4>
+                                                     <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${assign.rawPeriod === 'morning' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{assign.period}</span>
+                                                 </div>
+                                                 {assign.canReport && (
+                                                     <button onClick={() => openReportModal(assign.sectorId, assign.rawPeriod)} className="w-full mt-2 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 flex items-center justify-center gap-2 shadow-sm">
+                                                         <Send size={12}/> Informar Assistência
+                                                     </button>
+                                                 )}
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
+                             
+                             {(!hasOrganogramRole && myAttendantAssignments.length === 0) && (
+                                 <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                                     <p className="text-slate-400 text-sm">Nenhuma designação encontrada para você neste evento.</p>
+                                 </div>
+                             )}
+                         </div>
+                     )}
+
+                     {/* PROGRAMA E NOTAS */}
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
+                            <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-500 group-hover:scale-110 transition-transform"><BookOpen size={32}/></div>
+                            <h3 className="font-bold text-slate-800">Programa e Anotações</h3>
+                            <p className="text-xs text-slate-500">Acompanhe os discursos e faça suas anotações pessoais.</p>
+                        </button>
+                        <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group">
+                            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={32}/></div>
+                            <h3 className="font-bold text-slate-800">Informações Gerais</h3>
+                            <p className="text-xs text-slate-500">Lembretes, locais de limpeza e contatos.</p>
+                        </button>
+                     </div>
+
+                     {selectedCong && (
+                         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+                             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Sparkles size={18} className="text-brand-500"/> Designação da Congregação</h3>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Limpeza</span>
+                                     <p className="font-bold text-slate-800">{selectedCong.cleaningAssignment || 'Não definido'}</p>
+                                     <p className="text-xs text-slate-500 mt-1">Resp: {selectedCong.cleaningResponsable || '-'}</p>
+                                 </div>
+                                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contas (Fichas)</span>
+                                     <p className="font-bold text-slate-800">{selectedCong.accountsAssignment || 'Não definido'}</p>
+                                 </div>
+                             </div>
+                         </div>
+                     )}
+                     
+                     <div className="bg-white rounded-[2rem] shadow-sm border border-emerald-100 p-5 flex flex-col items-center text-center relative overflow-hidden group hover:shadow-md transition-all"><div className="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div><div className="bg-emerald-50 p-3 rounded-full mb-3 group-hover:scale-110 transition-transform"><Heart size={24} className="text-emerald-600 fill-emerald-600"/></div><h3 className="font-bold text-slate-800 text-base mb-1">Donativos para a Obra Mundial</h3><p className="text-xs text-slate-500 mb-4 max-w-xs">Apoie os eventos e a obra mundial das Testemunhas de Jeová através do site oficial.</p><a href="https://donate.jw.org/pt/BRA/home" target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2">Acessar donate.jw.org <span className="text-emerald-200">↗</span></a></div>
+                     <div className="text-center px-2 pt-4 border-t border-slate-200/50"><p className="text-[9px] text-slate-400 mb-2 font-medium">Gostou do App? Contribua voluntariamente:</p><button onClick={handleCopyPix} className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-[9px] font-bold hover:bg-white hover:text-slate-700 transition-all shadow-sm w-full justify-center"><Copy size={10}/> {pixFeedback || "Copiar Chave Pix (App)"}</button></div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    
-                    {isAdmin && isOrgEmpty(orgData) && (
-                      <div className="col-span-full bg-amber-50 border border-amber-200 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 mb-2 animate-bounce-in">
-                        <div className="flex items-center gap-4">
-                          <div className="bg-amber-100 p-3 rounded-full text-amber-600"><Upload size={24}/></div>
-                          <div>
-                            <h3 className="font-bold text-amber-900 text-lg">Restaurar Dados?</h3>
-                            <p className="text-sm text-amber-700 leading-tight">O evento parece vazio. Importe o arquivo que você baixou do seu computador.</p>
-                          </div>
-                        </div>
-                        <button onClick={() => setView('general_info')} className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-md transition-all whitespace-nowrap flex items-center gap-2">
-                          <Upload size={18}/> Ir para Importação
-                        </button>
-                      </div>
-                    )}
-
-                    {isAdmin && <button onClick={() => setView('cover')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-brand-50 text-brand-600 p-3 rounded-lg group-hover:bg-brand-100 transition-colors"><BookOpen size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Capa e Programa</h3><p className="text-xs text-slate-500">Definir data, local e imagem de capa.</p></div></button>}
-                    <button onClick={() => setView('organogram')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-blue-50 text-blue-600 p-3 rounded-lg group-hover:bg-blue-100 transition-colors"><Layout size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Organograma</h3><p className="text-xs text-slate-500">Designar voluntários para os departamentos.</p></div></button>
-                    {isAdmin && <button onClick={() => setView('general_info')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-slate-100 text-slate-600 p-3 rounded-lg group-hover:bg-slate-200 transition-colors"><Settings size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Geral e Contatos</h3><p className="text-xs text-slate-500">Lembretes, congregações e backup.</p></div></button>}
-                    
-                    {(isAdmin || isAttendantOverseer) && <button onClick={() => setView('attendants')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-orange-50 text-orange-600 p-3 rounded-lg group-hover:bg-orange-100 transition-colors"><UserCheck size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Indicadores</h3><p className="text-xs text-slate-500">Gerenciar turnos e assistência.</p></div></button>}
-                    {(isAdmin || isParkingOverseer) && <button onClick={() => setView('parking')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-gray-100 text-gray-600 p-3 rounded-lg group-hover:bg-gray-200 transition-colors"><Car size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Estacionamento</h3><p className="text-xs text-slate-500">Gerenciar vagas e voluntários.</p></div></button>}
-
-                    {isAdmin && (
-                        <button onClick={() => setView('cleaning')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-emerald-50 text-emerald-600 p-3 rounded-lg group-hover:bg-emerald-100 transition-colors"><Sparkles size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Limpeza</h3><p className="text-xs text-slate-500">Designar limpeza por congregação.</p></div></button>
-                    )}
-
-                    {isAdmin && <button onClick={() => setView('sharing')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-purple-50 text-purple-600 p-3 rounded-lg group-hover:bg-purple-100 transition-colors"><Share2 size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Convidar Equipe</h3><p className="text-xs text-slate-500">{copyFeedback || 'Gerar link e PIN para voluntários.'}</p></div></button>}
-                    {isAdmin && <button onClick={() => setView('sharing')} className="p-5 bg-white rounded-2xl shadow-sm border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col items-start gap-3 group"><div className="bg-cyan-50 text-cyan-600 p-3 rounded-lg group-hover:bg-cyan-100 transition-colors"><LinkIcon size={24}/></div><div><h3 className="font-bold text-slate-800 text-base">Link Público</h3><p className="text-xs text-slate-500">{copyFeedback || 'Link para a assistência em geral.'}</p></div></button>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                     <button onClick={() => setView('cover')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform"><Layout size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Capa do Evento</h3></button>
+                     <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><BookOpen size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Programa</h3></button>
+                     <button onClick={() => { setOrganogramPinInput(''); setShowOrganogramPinModal(true); }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
+                     <button onClick={() => setView('cleaning')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform"><Sparkles size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Limpeza e Fichas</h3></button>
+                     <button onClick={() => setView('general_info')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform"><Info size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Geral e Contatos</h3></button>
+                     <button onClick={() => setView('attendants')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Indicadores</h3></button>
+                     <button onClick={() => setView('parking')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center text-sky-500 group-hover:scale-110 transition-transform"><Car size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Estacionamento</h3></button>
+                     <button onClick={() => setView('sharing')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500 group-hover:scale-110 transition-transform"><Share2 size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Compartilhar</h3></button>
                   </div>
                 )}
              </div>
           )}
-          {view === 'cover' && program && <Cover program={program} onEnter={() => setView('program')} onBack={() => setView('dashboard')} initialCircuitId={authSession.eventId} />}
-          {view === 'program' && selectedEventType && program && <Program program={program} notes={notes} onNoteChange={handleUpdateNotes} attendance={attendance} onAttendanceChange={handleUpdateAttendance} onUpdateProgram={isAdmin ? handleUpdateProgram : undefined} isAdmin={isAdmin} onAddSuggestion={handleAddSuggestion} userName={authSession.userName} />}
-          {view === 'organogram' && selectedEventType && orgData && <Organogram data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} eventType={selectedEventType} isAttendantOverseer={isAttendantOverseer} isParkingOverseer={isParkingOverseer} />}
-          {view === 'cleaning' && orgData && <CleaningManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />}
-          {view === 'attendants' && orgData && <AttendantManager data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin || isAttendantOverseer} />}
-          {view === 'general_info' && orgData && <GeneralInfo data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} onBack={() => setView('dashboard')} onForceRestore={handleForceRestoreFromBackup} currentProgram={program} currentNotes={notes} currentAttendance={attendance} currentEventType={selectedEventType} />}
-          {view === 'parking' && orgData && <ParkingManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin || isParkingOverseer} />}
-          {view === 'sharing' && authSession && <SharingCenter eventId={authSession.eventId} onBack={() => setView('dashboard')} cloudUrl={cloudUrl} cloudKey={cloudKey} orgData={orgData} cloudPass={cloudPass} />}
+
+          {view === 'cover' && <Cover program={program} onEnter={() => setView('program')} onBack={() => setView('dashboard')} initialCircuitId={authSession.eventId !== 'MASTER' ? authSession.eventId : undefined} />}
+          {view === 'program' && (
+            <div className="animate-fade-in relative">
+              <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
+              <Program 
+                program={program} 
+                notes={notes} 
+                onNoteChange={handleUpdateNotes} 
+                attendance={attendance} 
+                onAttendanceChange={handleUpdateAttendance} 
+                onUpdateProgram={isAdmin ? handleUpdateProgram : undefined}
+                isAdmin={isAdmin}
+                onAddSuggestion={handleAddSuggestion}
+                userName={authSession.userName}
+              />
+            </div>
+          )}
+          {view === 'organogram' && (
+             <div className="relative">
+                <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
+                <Organogram 
+                  data={orgData} 
+                  onUpdate={handleUpdateOrg} 
+                  isAdmin={isAdmin} 
+                  eventType={selectedEventType}
+                  isAttendantOverseer={isAttendantOverseer}
+                  isParkingOverseer={isParkingOverseer}
+                />
+             </div>
+          )}
+          {view === 'cleaning' && (
+             <div className="relative">
+                <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
+                <CleaningManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />
+             </div>
+          )}
+          {view === 'general_info' && <GeneralInfo 
+              data={orgData} 
+              onUpdate={handleUpdateOrg} 
+              isAdmin={isAdmin} 
+              onBack={() => setView('dashboard')} 
+              onForceRestore={handleForceRestoreFromBackup}
+              isSuperAdmin={isSuperAdmin}
+              currentProgram={program}
+              currentNotes={notes}
+              currentAttendance={attendance}
+              currentEventType={selectedEventType}
+          />}
+          {view === 'attendants' && (
+             <div className="relative">
+                <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
+                <AttendantManager data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />
+             </div>
+          )}
+          {view === 'parking' && (
+             <div className="relative">
+                <button onClick={() => setView('dashboard')} className="fixed top-24 left-4 z-30 p-2 bg-white rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-slate-800"><ArrowLeft size={20}/></button>
+                <ParkingManagement data={orgData} onUpdate={handleUpdateOrg} isAdmin={isAdmin} />
+             </div>
+          )}
+          {view === 'sharing' && <SharingCenter eventId={authSession.eventId} onBack={() => setView('dashboard')} cloudUrl={cloudUrl} cloudKey={cloudKey} cloudPass={cloudPass} orgData={orgData} />}
        </main>
-       
-      {showReportModal && ( <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-bounce-in overflow-hidden"><div className={`p-5 flex justify-between items-center ${reportPeriod === 'morning' ? 'bg-amber-400' : 'bg-blue-600'} text-white`}><h3 className="font-bold text-lg flex items-center gap-2">{reportPeriod === 'morning' ? <Sun size={20}/> : <Moon size={20}/>} Reportar Assistência</h3><button onClick={() => setShowReportModal(false)} className="bg-white/20 p-1.5 rounded-full hover:bg-white/30"><X size={18}/></button></div><div className="p-6 space-y-4"><div className="bg-orange-50 border border-orange-100 rounded-lg p-3 text-center"><p className="text-xs text-orange-700 font-bold leading-tight">Certifique-se com seu companheiro a quantidade.</p></div><p className="text-sm text-slate-600 text-center">Digite a quantidade total de assistência do seu setor ({DEFAULT_SECTORS.find(s => s.id === reportSectorId)?.name || 'Setor'}).</p><div className="flex justify-center"><input autoFocus type="number" className="w-32 text-center text-4xl font-bold border-b-2 border-slate-300 focus:border-slate-800 outline-none py-2 bg-transparent font-mono" placeholder="0" value={reportValue} onChange={(e) => setReportValue(e.target.value)} /></div><button onClick={handleReportAttendance} disabled={!reportValue || reportSent} className={`w-full py-3.5 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${reportSent ? 'bg-emerald-500' : 'bg-emerald-500'}`}>{reportSent ? <CheckCircle2 size={20}/> : <Send size={20}/>}{reportSent ? 'Enviado!' : 'Enviar'}</button></div></div></div> )}
-      {showOrganogramPinModal && ( <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-fade-in overflow-hidden border border-slate-200"><div className="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Lock size={18}/> Acesso ao Organograma</h3><button onClick={() => setShowOrganogramPinModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X size={20} className="text-slate-400 hover:text-slate-600"/></button></div><form onSubmit={handleOrganogramPinSubmit} className="p-6 space-y-4"><p className="text-sm text-slate-600 text-center">Insira o PIN de acesso dos voluntários.</p><div className="relative group"><Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={20} /><input autoFocus type="password" className="w-full text-center tracking-widest font-mono text-xl border-2 border-slate-200 bg-slate-50 rounded-xl py-3 outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-500" value={organogramPinInput} onChange={(e) => { setOrganogramPinInput(e.target.value); setOrganogramPinError(''); }} /></div>{organogramPinError && <p className="text-xs text-red-500 text-center font-bold">{organogramPinError}</p>}<button type="submit" className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-sm">Verificar</button></form></div></div> )}
-      
-      <p className="text-[10px] text-slate-400 mt-2 flex items-center justify-center gap-1 pb-4">
-         <Lock size={10} /> Dados criptografados e armazenados localmente.
-      </p>
+
+       {/* MODAL DE PIN PARA ORGANOGRAMA */}
+       {showOrganogramPinModal && (
+          <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center animate-fade-in relative overflow-hidden">
+                  <button onClick={() => { setShowOrganogramPinModal(false); setOrganogramPinError(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                  <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-500"><Lock size={32}/></div>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">Acesso Restrito</h3>
+                  <p className="text-sm text-slate-500 mb-6">O organograma contém dados sensíveis. Digite o PIN da equipe para acessar.</p>
+                  <form onSubmit={handleOrganogramPinSubmit}>
+                      <input 
+                        type="password" 
+                        inputMode="numeric" 
+                        className="w-full text-center text-2xl font-bold tracking-widest py-3 border-b-2 border-slate-200 outline-none focus:border-brand-500 bg-transparent mb-4 text-slate-800" 
+                        placeholder="••••" 
+                        maxLength={10}
+                        value={organogramPinInput}
+                        onChange={(e) => { setOrganogramPinInput(e.target.value); setOrganogramPinError(''); }}
+                        autoFocus
+                      />
+                      {organogramPinError && <p className="text-xs font-bold text-red-500 mb-4 animate-pulse">{organogramPinError}</p>}
+                      <button type="submit" className="w-full py-3 bg-brand-600 text-white rounded-xl font-bold shadow-lg hover:bg-brand-700 transition-all">Acessar</button>
+                  </form>
+              </div>
+          </div>
+       )}
+
+       {/* MODAL DE INFORMAR ASSISTÊNCIA */}
+       {showReportModal && (
+           <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in">
+                   <h3 className="font-bold text-slate-800 text-lg mb-4 text-center flex items-center justify-center gap-2">
+                       {reportPeriod === 'morning' ? <Sun size={20} className="text-amber-500" /> : <Moon size={20} className="text-blue-500" />}
+                       Informar Assistência
+                   </h3>
+                   <div className="mb-4 text-center">
+                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${reportPeriod === 'morning' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                           {reportPeriod === 'morning' ? 'Turno da Manhã' : 'Turno da Tarde'}
+                       </span>
+                   </div>
+                   <input 
+                       type="number" 
+                       className="w-full text-center text-4xl font-bold text-slate-800 py-4 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-brand-500 outline-none mb-6" 
+                       placeholder="0"
+                       autoFocus
+                       value={reportValue}
+                       onChange={(e) => setReportValue(e.target.value)}
+                   />
+                   <div className="flex gap-3">
+                       <button onClick={() => setShowReportModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancelar</button>
+                       <button onClick={handleReportAttendance} disabled={!reportValue || reportSent} className="flex-1 py-3 bg-brand-600 text-white font-bold rounded-xl shadow-lg hover:bg-brand-700 transition-all flex items-center justify-center gap-2">
+                           {reportSent ? <Check size={20}/> : <Send size={18}/>}
+                           {reportSent ? 'Enviado!' : 'Enviar'}
+                       </button>
+                   </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 };

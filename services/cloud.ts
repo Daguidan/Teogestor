@@ -15,29 +15,54 @@ let encryptionPassword = '';
 // Helper para limpar e corrigir URL de forma agressiva
 const cleanUrl = (url: string) => {
     if (!url) return '';
-    // Remove TODOS os espaços em branco, quebras de linha e caracteres invisíveis (zero-width spaces)
+    // 1. Remove espaços e caracteres invisíveis
     let cleaned = url.replace(/\s+/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
     
-    // CASO 1: Usuário colou a URL do Dashboard (Erro comum)
+    // 2. Remove duplicidade de protocolo (ex: https://https://...)
+    if (cleaned.match(/^https?:\/\/https?:\/\//)) {
+        cleaned = cleaned.replace(/^https?:\/\//, '');
+    }
+
+    // 3. CASO: Usuário colou a URL do Dashboard
     const dashboardMatch = cleaned.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/);
     if (dashboardMatch && dashboardMatch[1]) {
         return `https://${dashboardMatch[1]}.supabase.co`;
     }
 
-    // CASO 2: Usuário colou apenas o Project ID (ex: kckyrfuczbhifvuwnfnh)
+    // 4. CASO: Usuário colou apenas o Project ID
     if (/^[a-z0-9]{20}$/.test(cleaned)) {
         return `https://${cleaned}.supabase.co`;
     }
 
-    // CASO 3: Normalização padrão
+    // 5. Garante HTTPS
     if (!cleaned.startsWith('http')) {
         cleaned = `https://${cleaned}`;
     }
+    
+    // 6. Remove barra final
     if (cleaned.endsWith('/')) {
         cleaned = cleaned.slice(0, -1);
     }
     
     return cleaned;
+};
+
+// Timeout promise wrapper
+// FIX: Alterado para usar .then(resolve, reject) que é compatível com PromiseLike (Supabase Builder)
+const withTimeout = <T>(promise: PromiseLike<T>, ms: number, errorMessage: string): Promise<T> => {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(errorMessage)), ms);
+        promise.then(
+            (value) => {
+                clearTimeout(timer);
+                resolve(value);
+            },
+            (reason) => {
+                clearTimeout(timer);
+                reject(reason);
+            }
+        );
+    });
 };
 
 export const CloudService = {
@@ -58,6 +83,9 @@ export const CloudService = {
                 persistSession: false,
                 autoRefreshToken: false,
                 detectSessionInUrl: false
+            },
+            global: {
+                headers: { 'x-application-name': 'teogestor' }
             }
         });
         return true;
@@ -102,15 +130,19 @@ export const CloudService = {
 
   // --- CRUD Operations ---
   
-  // Teste de conexão real
+  // Teste de conexão real com Timeout
   testConnection: async () => {
     if (!supabase) return { success: false, error: 'Cliente não inicializado' };
     try {
-        // Tenta buscar apenas 1 registro para ver se a tabela existe e a chave funciona
-        const { error } = await supabase.from(TABLE_NAME).select('id').limit(1);
+        // Timeout de 10s para não travar a interface se o projeto estiver pausado/offline
+        const { error } = await withTimeout(
+            supabase.from(TABLE_NAME).select('id').limit(1),
+            10000,
+            'Tempo limite excedido. O projeto Supabase pode estar PAUSADO.'
+        );
         
         if (error) {
-            if (error.code === '42P01') { // Código PostgreSQL para "tabela não existe"
+            if (error.code === '42P01') { 
                 return { success: false, error: 'A tabela "evento" não existe. Use o botão "Script SQL" na configuração.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
@@ -118,8 +150,11 @@ export const CloudService = {
         return { success: true };
     } catch (e: any) {
         const msg = e.message || '';
-        if (msg.includes('Failed to fetch')) {
-             return { success: false, error: 'Falha na conexão (Failed to fetch). A URL parece incorreta ou bloqueada.' };
+        if (msg.includes('Failed to fetch') || msg.includes('Load failed')) {
+             return { success: false, error: 'Falha de rede. Verifique a URL ou se o projeto Supabase foi pausado (Free Tier).' };
+        }
+        if (msg.includes('PAUSADO')) {
+            return { success: false, error: 'O projeto Supabase parece estar PAUSADO. Acesse supabase.com para reativá-lo.' };
         }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }
@@ -143,16 +178,20 @@ export const CloudService = {
          };
       }
 
-      const { error } = await supabase
-        .from(TABLE_NAME)
-        .upsert(
-          { 
-            id: eventId, 
-            data: payload,
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'id' }
-        );
+      const { error } = await withTimeout(
+          supabase
+            .from(TABLE_NAME)
+            .upsert(
+              { 
+                id: eventId, 
+                data: payload,
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: 'id' }
+            ),
+          15000,
+          'Tempo limite excedido no upload.'
+      );
       
       if (error) throw error;
       return { success: true };
@@ -170,11 +209,15 @@ export const CloudService = {
     if (!supabase) return { error: 'Nuvem não conectada' };
 
     try {
-      const { data, error } = await supabase
-        .from(TABLE_NAME)
-        .select('data, updated_at')
-        .eq('id', eventId)
-        .single();
+      const { data, error } = await withTimeout(
+          supabase
+            .from(TABLE_NAME)
+            .select('data, updated_at')
+            .eq('id', eventId)
+            .single(),
+          10000,
+          'Tempo limite excedido no download.'
+      );
 
       if (error) {
          if (error.code === 'PGRST116') return { data: null };
@@ -212,22 +255,26 @@ export const CloudService = {
     }
   },
 
-  // NOVA FUNÇÃO: Lista todos os eventos para o provedor master
+  // Lista todos os eventos para o provedor master
   listAllEvents: async () => {
     if (!supabase) return { error: 'Nuvem não conectada' };
 
     try {
-      const { data, error } = await supabase
-        .from(TABLE_NAME)
-        .select('id, updated_at')
-        .order('updated_at', { ascending: false });
+      const { data, error } = await withTimeout(
+          supabase
+            .from(TABLE_NAME)
+            .select('id, updated_at')
+            .order('updated_at', { ascending: false }),
+          8000, // 8s timeout para listagem
+          'Timeout'
+      );
 
       if (error) throw error;
       return { data };
     } catch (e: any) {
       console.error("Erro ao listar eventos:", e);
-      if (e.message && e.message.includes('Failed to fetch')) {
-          return { error: 'Falha de conexão. Verifique se a URL do Supabase está correta e sem espaços.' };
+      if (e.message && (e.message.includes('Failed to fetch') || e.message === 'Timeout')) {
+          return { error: 'Falha de conexão. Projeto Supabase pausado ou URL incorreta.' };
       }
       return { error: e.message || 'Erro de conexão' };
     }
