@@ -1503,7 +1503,7 @@ $$;`}
             <Cloud size={20} />
             {!cloudUrl && (
               <span className="text-[10px] font-bold uppercase hidden sm:inline">
-                Conectar
+                Conectar Nuvem
               </span>
             )}
 
@@ -1844,7 +1844,8 @@ $$;`}
               currentNotes={notes}
               currentAttendance={attendance}
               currentEventType={selectedEventType}
-              onResetProgram={handleResetEventConfig} 
+              onResetProgram={handleResetEventConfig}
+              onOpenCloud={handleOpenCloudModal}
           />}
           {view === 'attendants' && (
              <div className="relative">

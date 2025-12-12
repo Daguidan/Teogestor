@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { OrgStructure, CongregationEntry, AssemblyProgram, EventType } from '../types';
-import { Save, Plus, Trash2, Edit2, Info, Check, User, Phone, Sparkles, X, Lock, Download, Upload, MessageSquare, ArrowLeft, Megaphone, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, Info, Check, User, Phone, Sparkles, X, Lock, Download, Upload, MessageSquare, ArrowLeft, Megaphone, RefreshCcw, AlertTriangle, Cloud } from 'lucide-react';
 
 interface GeneralInfoProps {
   data: OrgStructure;
@@ -16,6 +16,7 @@ interface GeneralInfoProps {
   currentAttendance?: Record<string, string>;
   currentEventType?: EventType | null;
   onResetProgram?: (type: EventType) => void; // Nova prop
+  onOpenCloud?: () => void; // Nova prop para abrir o modal da nuvem
 }
 
 export const GeneralInfo: React.FC<GeneralInfoProps> = ({ 
@@ -28,7 +29,8 @@ export const GeneralInfo: React.FC<GeneralInfoProps> = ({
     currentNotes, 
     currentAttendance,
     currentEventType,
-    onResetProgram
+    onResetProgram,
+    onOpenCloud
 }) => {
   const [localData, setLocalData] = useState<OrgStructure>(data);
   const [message, setMessage] = useState('');
@@ -260,7 +262,25 @@ export const GeneralInfo: React.FC<GeneralInfoProps> = ({
                   <div className="space-y-3 text-sm"><div className="flex flex-col gap-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Coordenador</span><div className="flex items-center justify-between"><div className="flex items-center gap-2 text-slate-700 font-bold"><User size={16} className="text-slate-400"/> {cong.coordinator || 'Não inf.'}</div><div className="flex items-center gap-1.5 text-slate-500 text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200"><Phone size={12} className="text-slate-400"/> {cong.phone || '-'}</div></div></div></div>
                </div>
             ))}
-            {congregations.length === 0 && ( <div className="col-span-full p-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50"><div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 shadow-sm"><Info size={40} /></div><p className="text-slate-400 font-medium text-sm">Nenhuma congregação cadastrada.</p></div> )}
+            {congregations.length === 0 && ( 
+                <div className="col-span-full p-8 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 shadow-sm"><Info size={32} /></div>
+                    <h3 className="font-bold text-slate-700 text-lg mb-2">Lista Vazia?</h3>
+                    <p className="text-slate-500 font-medium text-sm mb-6 max-w-md mx-auto leading-relaxed">
+                        Se você acabou de subir o site, seus dados ainda estão no seu computador. Para vê-los aqui, conecte a nuvem e faça o download.
+                    </p>
+                    <div className="flex justify-center gap-3 flex-wrap">
+                        {onOpenCloud && (
+                            <button onClick={onOpenCloud} className="px-5 py-3 bg-brand-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-brand-700 flex items-center gap-2">
+                                <Cloud size={18}/> Conectar Nuvem
+                            </button>
+                        )}
+                        <button onClick={() => fileInputRef.current?.click()} className="px-5 py-3 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 flex items-center gap-2">
+                            <Upload size={18}/> Importar Backup
+                        </button>
+                    </div>
+                </div> 
+            )}
          </div>
       </div>
 
