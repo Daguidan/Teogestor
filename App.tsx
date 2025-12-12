@@ -90,11 +90,6 @@ const normalizePhone = (phone: string): string => {
     return phone.replace(/\D/g, ''); // Remove all non-digit characters
 };
 
-const nameMatches = (loginName: string, fullName: string): boolean => {
-  if (!loginName || !fullName) return false;
-  return normalizeString(fullName).startsWith(normalizeString(loginName));
-};
-
 // FIX: Relaxed empty check. Event is NOT empty if it has congregations, even if committee is null.
 const isOrgEmpty = (org: OrgStructure | null) => {
     if (!org) return true;
@@ -142,7 +137,6 @@ const App: React.FC = () => {
   
   const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
-  const [initialManagementType, setInitialManagementType] = useState<'ASSEMBLY' | 'CONVENTION' | null>(null);
   
   const [isRepairingSession, setIsRepairingSession] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -158,6 +152,7 @@ const App: React.FC = () => {
   
   const [providerEventList, setProviderEventList] = useState<ProviderEventInfo[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [eventsError, setEventsError] = useState('');
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [providerNewEventId, setProviderNewEventId] = useState('');
   const [providerNewEventType, setProviderNewEventType] = useState<'ASSEMBLY' | 'CONVENTION'>('ASSEMBLY');
@@ -178,7 +173,6 @@ const App: React.FC = () => {
   
   const [selectedUserCongId, setSelectedUserCongId] = useState(() => SecureStorage.getItem('user_congregation_id', ''));
 
-  const [potentialMatches, setPotentialMatches] = useState<VolunteerData[]>([]);
   const [isDisambiguationRequired, setIsDisambiguationRequired] = useState(false);
   const [disambiguationPhoneInput, setDisambiguationPhoneInput] = useState('');
   const [confirmedVolunteer, setConfirmedVolunteer] = useState<VolunteerData | null>(null);
@@ -334,11 +328,12 @@ const App: React.FC = () => {
   const fetchProviderEvents = async () => {
     if (!CloudService.getConfig()) return;
     setIsLoadingEvents(true);
+    setEventsError('');
     const result = await CloudService.listAllEvents();
     if (result.data) {
       setProviderEventList(result.data);
     } else {
-      alert("Erro ao carregar eventos: " + result.error);
+      setEventsError(result.error || 'Erro desconhecido');
     }
     setIsLoadingEvents(false);
   };
@@ -429,7 +424,6 @@ const App: React.FC = () => {
                 setLoginEventId(config.target);
                 setIsDirectLink(true);
              }
-             if (config.mType) setInitialManagementType(config.mType); 
              if(!config.target) {
                setShowAdminModal(false);
              }
@@ -1089,7 +1083,7 @@ const App: React.FC = () => {
       const assignments: { dept: string, role: string }[] = [];
       const normalizedPhone = normalizePhone(confirmedVolunteer.phone);
       
-      const checkDept = (list: any[], listName: string) => {
+      const checkDept = (list: any[]) => {
           list.forEach(d => {
               if (d.overseer && normalizePhone(d.overseer.phone) === normalizedPhone) {
                   assignments.push({ dept: d.name, role: 'Encarregado' });
@@ -1102,11 +1096,11 @@ const App: React.FC = () => {
           });
       };
       
-      checkDept(orgData.aoDepartments || [], 'AO');
-      checkDept(orgData.aaoDepartments || [], 'AAO');
-      checkDept(orgData.coordDepartments || [], 'Coordenação');
-      checkDept(orgData.progDepartments || [], 'Programa');
-      checkDept(orgData.roomDepartments || [], 'Hospedagem');
+      checkDept(orgData.aoDepartments || []);
+      checkDept(orgData.aaoDepartments || []);
+      checkDept(orgData.coordDepartments || []);
+      checkDept(orgData.progDepartments || []);
+      checkDept(orgData.roomDepartments || []);
       
       orgData.parkingData?.forEach(p => {
           if ((p.morningVol1 && normalizePhone(p.morningVol1.phone) === normalizedPhone) || (p.morningVol2 && normalizePhone(p.morningVol2.phone) === normalizedPhone)) {
@@ -1350,6 +1344,11 @@ const App: React.FC = () => {
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Server size={18} /> Eventos Registrados</h3><button onClick={fetchProviderEvents} className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"><RefreshCw size={16}/></button></div>
+                      {eventsError ? (
+                          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex items-center gap-3">
+                              <AlertTriangle size={18}/> {eventsError}
+                          </div>
+                      ) : null}
                       {isLoadingEvents ? <p className="text-center text-slate-400 py-8">Carregando...</p> : (
                         <div className="space-y-2 max-h-96 overflow-y-auto pr-2">{providerEventList.map(event => (<div key={event.id} className="p-3 bg-slate-50 rounded-lg flex justify-between items-center border border-slate-100"><div className="flex-1 min-w-0"><strong className="font-mono text-slate-700 truncate block">{event.id}</strong><p className="text-xs text-slate-500">Atualizado em: {new Date(event.updated_at).toLocaleString('pt-BR')}</p></div></div>))}</div>
                       )}

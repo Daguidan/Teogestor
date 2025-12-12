@@ -13,16 +13,41 @@ const TABLE_NAME = 'evento'; // NOME DA TABELA CENTRALIZADO (CORRIGIDO PARA SING
 let supabase: SupabaseClient | null = null;
 let encryptionPassword = '';
 
+// Helper para limpar URL
+const cleanUrl = (url: string) => {
+    if (!url) return '';
+    let cleaned = url.trim();
+    // Garante https:// se não tiver
+    if (!cleaned.startsWith('http')) {
+        cleaned = `https://${cleaned}`;
+    }
+    // Remove barra no final se tiver
+    if (cleaned.endsWith('/')) {
+        cleaned = cleaned.slice(0, -1);
+    }
+    return cleaned;
+};
+
 export const CloudService = {
   // Inicializa o cliente se as credenciais existirem
   init: (): boolean => {
-    const url = SecureStorage.getItem(CLOUD_URL_KEY, '');
-    const key = SecureStorage.getItem(CLOUD_KEY_KEY, '');
+    let url = SecureStorage.getItem(CLOUD_URL_KEY, '');
+    let key = SecureStorage.getItem(CLOUD_KEY_KEY, '');
     encryptionPassword = SecureStorage.getItem(CLOUD_PASS_KEY, '');
+
+    // Limpeza de segurança
+    url = cleanUrl(url);
+    key = key.trim();
 
     if (url && key) {
       try {
-        supabase = createClient(url, key);
+        supabase = createClient(url, key, {
+            auth: {
+                persistSession: false, // Evita problemas de localStorage com sessão de usuário
+                autoRefreshToken: false,
+                detectSessionInUrl: false
+            }
+        });
         return true;
       } catch (e) {
         console.error("Erro ao iniciar Supabase", e);
@@ -35,11 +60,16 @@ export const CloudService = {
   // Salva credenciais e conecta
   configure: (url: string, key: string, pass: string): boolean => {
     if (!url || !key) return false;
-    SecureStorage.setItem(CLOUD_URL_KEY, url);
-    SecureStorage.setItem(CLOUD_KEY_KEY, key);
-    SecureStorage.setItem(CLOUD_PASS_KEY, pass);
     
-    encryptionPassword = pass;
+    const cleanUrlStr = cleanUrl(url);
+    const cleanKeyStr = key.trim();
+    const cleanPassStr = pass.trim();
+
+    SecureStorage.setItem(CLOUD_URL_KEY, cleanUrlStr);
+    SecureStorage.setItem(CLOUD_KEY_KEY, cleanKeyStr);
+    SecureStorage.setItem(CLOUD_PASS_KEY, cleanPassStr);
+    
+    encryptionPassword = cleanPassStr;
     return CloudService.init();
   },
 
@@ -71,10 +101,14 @@ export const CloudService = {
             if (error.code === '42P01') { // Código PostgreSQL para "tabela não existe"
                 return { success: false, error: 'A tabela "evento" não existe. Crie-a no SQL Editor do Supabase.' };
             }
-            return { success: false, error: error.message };
+            return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
         return { success: true };
     } catch (e: any) {
+        const msg = e.message || '';
+        if (msg.includes('Failed to fetch')) {
+             return { success: false, error: 'Falha na conexão (Failed to fetch). Verifique se a URL do projeto está correta (sem espaços) e se o projeto no Supabase não está pausado.' };
+        }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }
   },
@@ -112,6 +146,9 @@ export const CloudService = {
       return { success: true };
     } catch (e: any) {
       console.error("Erro no upload Cloud:", e);
+      if (e.message && e.message.includes('Failed to fetch')) {
+          return { error: 'Erro de conexão (URL inválida ou projeto pausado).' };
+      }
       return { error: e.message || 'Erro de conexão' };
     }
   },
@@ -156,6 +193,9 @@ export const CloudService = {
       return { data: finalData, updatedAt: data?.updated_at };
     } catch (e: any) {
       console.error("Erro no download Cloud:", e);
+      if (e.message && e.message.includes('Failed to fetch')) {
+          return { error: 'Erro de conexão (URL inválida ou projeto pausado).' };
+      }
       return { error: e.message || 'Erro de conexão' };
     }
   },
@@ -174,6 +214,9 @@ export const CloudService = {
       return { data };
     } catch (e: any) {
       console.error("Erro ao listar eventos:", e);
+      if (e.message && e.message.includes('Failed to fetch')) {
+          return { error: 'Falha de conexão. Verifique se a URL do Supabase está correta e sem espaços.' };
+      }
       return { error: e.message || 'Erro de conexão' };
     }
   },

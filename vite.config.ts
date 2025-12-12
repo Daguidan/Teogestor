@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Carrega variáveis de ambiente baseado no modo (development/production)
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = loadEnv(mode, '.', '');
 
   return {
     plugins: [react()],
@@ -18,6 +18,18 @@ export default defineConfig(({ mode }) => {
     server: {
       watch: {
         ignored: ['**/node_modules/**']
+      }
+    },
+    build: {
+      // Otimizações de build para evitar erros de memória no Vercel
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', '@supabase/supabase-js'],
+            ui: ['lucide-react']
+          }
+        }
       }
     },
     optimizeDeps: {
