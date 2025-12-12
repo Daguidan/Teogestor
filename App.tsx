@@ -698,7 +698,7 @@ const App: React.FC = () => {
   
   const handleCloudConfigSave = async () => { 
       if (!cloudUrl || !cloudKey || !cloudPass) {
-          alert("Por favor, preencha URL, API Key e a Senha de Criptografia.");
+          showToast("Por favor, preencha URL, API Key e a Senha de Criptografia.", 'error');
           return;
       }
       
@@ -720,11 +720,15 @@ const App: React.FC = () => {
                   fetchProviderEvents();
               }
           } else {
-              alert(`⚠️ Credenciais salvas, mas houve um erro ao conectar: \n\n${result.error}`);
+              showToast(`⚠️ Erro ao conectar: ${result.error}`, 'error');
+              // Se o erro for de tabela inexistente (42P01), abre a ajuda automaticamente
+              if (result.error && (result.error.includes('tabela') || result.error.includes('42P01'))) {
+                  setShowSqlHelp(true);
+              }
           }
       } else {
           setIsTestingCloud(false);
-          alert("Erro ao salvar configuração. Verifique os dados."); 
+          showToast("Erro ao salvar configuração.", 'error'); 
       }
   };
   
