@@ -136,6 +136,7 @@ const App: React.FC = () => {
   const [isDirectLink, setIsDirectLink] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showCloudPass, setShowCloudPass] = useState(false); // Toggle for Cloud Password
   
   const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
@@ -184,6 +185,16 @@ const App: React.FC = () => {
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
       setToastMessage({ type, text });
       setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleOpenCloudModal = () => {
+      const config = CloudService.getConfig();
+      if (config) {
+          setCloudUrl(config.url);
+          setCloudKey(config.key);
+          setCloudPass(config.encryptionPass || '');
+      }
+      setShowCloudModal(true);
   };
 
   // --- PRE-LOAD DATA FUNCTION ---
@@ -1203,17 +1214,26 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+      <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 relative">
         <label className="block text-[10px] font-bold text-amber-700 uppercase mb-2 flex items-center gap-1">
             <Key size={12}/> Senha de Criptografia (Invente uma)
         </label>
-        <input 
-            type="password" 
-            className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 text-sm font-mono outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" 
-            placeholder="Sua senha secreta..." 
-            value={cloudPass} 
-            onChange={e => setCloudPass(e.target.value)} 
-        />
+        <div className="relative">
+            <input 
+                type={showCloudPass ? "text" : "password"} 
+                className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 pr-10 text-sm font-mono outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" 
+                placeholder="Sua senha secreta..." 
+                value={cloudPass} 
+                onChange={e => setCloudPass(e.target.value)} 
+            />
+            <button 
+                type="button" 
+                onClick={() => setShowCloudPass(!showCloudPass)} 
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+            >
+                {showCloudPass ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+        </div>
         <p className="text-[9px] text-amber-800 mt-2 leading-tight">
             <strong>Atenção:</strong> Essa senha criptografa seus dados antes de enviar. Se esquecer, perde tudo.
         </p>
@@ -1331,7 +1351,7 @@ $$;`}
         {/* BOTÃO DE CONFIGURAÇÃO DA NUVEM - SEMPRE VISÍVEL PARA ADMIN E MASTER */}
         {(isAdmin || isSuperAdmin || isMaster) && (
           <button
-            onClick={() => setShowCloudModal(true)}
+            onClick={handleOpenCloudModal}
             className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${
               cloudUrl
                 ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200'
@@ -1416,13 +1436,19 @@ $$;`}
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                       <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Server size={18} /> Eventos Registrados</h3><button onClick={fetchProviderEvents} className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"><RefreshCw size={16}/></button></div>
+                      
+                      <div className="mb-4 text-xs text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 flex items-center justify-between">
+                         <span>Conectado a: <strong>{cloudUrl ? cloudUrl.replace('https://', '').split('.')[0] + '...' : 'Não configurado'}</strong></span>
+                         <button onClick={handleOpenCloudModal} className="text-brand-600 hover:underline font-bold uppercase tracking-wide">Editar</button>
+                      </div>
+
                       {eventsError ? (
                           <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100 mb-4 flex flex-col md:flex-row items-center justify-between gap-3 animate-fade-in">
                               <div className="flex items-center gap-3">
                                 <AlertTriangle size={18} className="shrink-0"/> 
                                 <span>{eventsError}</span>
                               </div>
-                              <button onClick={() => setShowCloudModal(true)} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs flex items-center gap-2 font-extrabold uppercase tracking-wide">
+                              <button onClick={handleOpenCloudModal} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs flex items-center gap-2 font-extrabold uppercase tracking-wide">
                                 <Settings size={14}/> Configurar Conexão
                               </button>
                           </div>
