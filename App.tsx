@@ -691,25 +691,83 @@ const App: React.FC = () => {
   }, [authSession, selectedEventType, showTypeSelection, isDirectLink, loginEventId, isRepairingSession]);
 
   const handleUpdateAttendant = (sId: string, f: string, v: any) => {
-      const cAtt = orgData.attendantsData || []; const idx = cAtt.findIndex(a => a.sectorId === sId);
+      const cAtt = orgData.attendantsData || [];
+      const idx = cAtt.findIndex(a => a.sectorId === sId);
       const nData = [...cAtt];
-      if (idx !== -1) { nData[idx] = { ...nData[idx], [f]: v }; } else { nData.push({ sectorId: sId, countMorning: 0, countAfternoon: 0, [f]: v } as any); }
+      
+      if (idx !== -1) {
+          nData[idx] = { ...nData[idx], [f]: v };
+      } else {
+          nData.push({
+              sectorId: sId,
+              countMorning: 0,
+              countAfternoon: 0,
+              [f]: v
+          } as any);
+      }
       handleUpdateOrg({ ...orgData, attendantsData: nData });
   };
+
   const handleReportAttendance = () => {
       if (!reportValue) return;
-      handleUpdateAttendant(reportSectorId, reportPeriod === 'morning' ? 'countMorning' : 'countAfternoon', parseInt(reportValue) || 0);
-      setReportSent(true); setTimeout(() => { setReportSent(false); setShowReportModal(false); setReportValue(''); }, 1500);
+      
+      handleUpdateAttendant(
+          reportSectorId,
+          reportPeriod === 'morning' ? 'countMorning' : 'countAfternoon',
+          parseInt(reportValue) || 0
+      );
+      
+      setReportSent(true);
+      setTimeout(() => {
+          setReportSent(false);
+          setShowReportModal(false);
+          setReportValue('');
+      }, 1500);
   };
+
   const handleAddSuggestion = (text: string) => {
-     const newS: SuggestionEntry = { id: Date.now().toString(), text, date: new Date().toLocaleString(), isRead: false };
-     const nData = { ...orgData }; if (!nData.generalInfo) nData.generalInfo = { reminders: '', congregations: [], suggestions: [] };
-     if (!nData.generalInfo.suggestions) nData.generalInfo.suggestions = [];
-     nData.generalInfo.suggestions.unshift(newS); handleUpdateOrg(nData);
+     const newS: SuggestionEntry = {
+        id: Date.now().toString(),
+        text,
+        date: new Date().toLocaleString(),
+        isRead: false
+     };
+     
+     const nData = { ...orgData };
+     if (!nData.generalInfo) {
+         nData.generalInfo = { reminders: '', congregations: [], suggestions: [] };
+     }
+     if (!nData.generalInfo.suggestions) {
+         nData.generalInfo.suggestions = [];
+     }
+     
+     nData.generalInfo.suggestions.unshift(newS);
+     handleUpdateOrg(nData);
   };
-  const handleUpdateNotes = (id: string, text: string) => { const n = { ...notes, [id]: text }; setNotes(n); if (authSession) SecureStorage.setItem(`${authSession.eventId}_notes`, n); };
-  const handleUpdateAttendance = (id: string, val: string) => { const a = { ...attendance, [id]: val }; setAttendance(a); if (authSession) SecureStorage.setItem(`${authSession.eventId}_attendance`, a); };
-  const handleUpdateProgram = (nP: AssemblyProgram) => { if(!nP) return; setProgram(nP); if (authSession) SecureStorage.setItem(`${authSession.eventId}_program_${program.type}`, nP); };
+
+  const handleUpdateNotes = (id: string, text: string) => {
+      const n = { ...notes, [id]: text };
+      setNotes(n);
+      if (authSession) {
+          SecureStorage.setItem(`${authSession.eventId}_notes`, n);
+      }
+  };
+
+  const handleUpdateAttendance = (id: string, val: string) => {
+      const a = { ...attendance, [id]: val };
+      setAttendance(a);
+      if (authSession) {
+          SecureStorage.setItem(`${authSession.eventId}_attendance`, a);
+      }
+  };
+
+  const handleUpdateProgram = (nP: AssemblyProgram) => {
+      if(!nP) return;
+      setProgram(nP);
+      if (authSession) {
+          SecureStorage.setItem(`${authSession.eventId}_program_${program.type}`, nP);
+      }
+  };
   
   // FIX: Função para redefinir o programa com base no tipo de evento selecionado
   const handleResetEventConfig = (newType: EventType) => {
@@ -843,7 +901,10 @@ const App: React.FC = () => {
     } else { // public
        text = `👋 *Programa Digital*\nPara anotações, horários e suas designações, acesse:\n${shortUrl}`;
     }
-    navigator.clipboard.writeText(text); setCopyFeedback('Copiado!'); setTimeout(() => setCopyFeedback(''), 2000);
+    
+    navigator.clipboard.writeText(text);
+    setCopyFeedback('Copiado!');
+    setTimeout(() => setCopyFeedback(''), 2000);
   };
 
   const handleCreateEventAndGenerateLink = async () => {
@@ -885,7 +946,11 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCopyPix = () => { navigator.clipboard.writeText("apoio@teogestor.app"); setPixFeedback('Chave Copiada!'); setTimeout(() => setPixFeedback(''), 2000); };
+  const handleCopyPix = () => {
+      navigator.clipboard.writeText("apoio@teogestor.app");
+      setPixFeedback('Chave Copiada!');
+      setTimeout(() => setPixFeedback(''), 2000);
+  };
   
   // LOGIC MOVED TO TOP OF COMPONENT
   const isPublic = useMemo(() => authSession?.role === 'public', [authSession]);
