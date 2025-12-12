@@ -571,9 +571,11 @@ const App: React.FC = () => {
                   if (cloudRes.data.org) loadedOrg = cloudRes.data.org;
                   if (cloudRes.data.program) loadedProgram = cloudRes.data.program;
                   if (cloudRes.data.type) {
-                      setSelectedEventType(cloudRes.data.type as EventType);
+                      const cloudType = cloudRes.data.type as EventType;
+                      setSelectedEventType(cloudType);
                       // Update derived flags based on fetched type
-                      isConventionType = cloudRes.data.type === 'REGIONAL_CONVENTION';
+                      isConventionType = cloudType === 'REGIONAL_CONVENTION';
+                      SecureStorage.setItem(`${eventKey}_last_event_type`, cloudType);
                   }
                   
                   // Persist fetched data to avoid re-fetching on reload
@@ -604,15 +606,20 @@ const App: React.FC = () => {
            const res = await CloudService.loadEvent(eventKey);
            if (res.data) {
                if(res.data.org) { 
-                   loadedOrg = res.data.org; 
-                   SecureStorage.setItem(correctStructKey, loadedOrg); 
+                   loadedOrg = res.data.org;
+                   // Detect type dynamically from cloud data if not yet set
+                   if (res.data.type) {
+                       const cloudType = res.data.type as EventType;
+                       const isCloudConvention = cloudType === 'REGIONAL_CONVENTION';
+                       SecureStorage.setItem(isCloudConvention ? `${eventKey}_CONVENTION_structure` : `${eventKey}_structure`, loadedOrg);
+                       setSelectedEventType(cloudType);
+                   } else {
+                       SecureStorage.setItem(correctStructKey, loadedOrg); 
+                   }
                }
                if(res.data.program) { 
                    loadedProgram = res.data.program; 
                    SecureStorage.setItem(`${eventKey}_program_${res.data.program.type}`, loadedProgram); 
-               }
-               if(res.data.type && !selectedEventType) {
-                   setSelectedEventType(res.data.type as EventType);
                }
            }
       }
@@ -1543,7 +1550,13 @@ $$;`}
                       </div>
                       {showPublicDashboard && ( <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl border border-white/20 w-full md:w-56 shrink-0 mt-2 md:mt-0"><label className="block text-[10px] font-bold text-white/80 mb-1.5 uppercase tracking-wider">Sua Congregação</label><div className="relative group"><select className="w-full p-2 rounded-lg border border-white/30 bg-transparent text-sm font-bold text-white outline-none appearance-none cursor-pointer" value={selectedUserCongId} onChange={(e) => handleCongregationSelect(e.target.value)}><option value="" style={{ color: 'black' }}>-- Ver designações --</option>{(orgData.generalInfo?.congregations || []).map(c => <option key={c.id} value={c.id} style={{ color: 'black' }}>{c.name}</option>)}</select><div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/80"><ChevronDown size={18}/></div></div>
                         {(!orgData.generalInfo?.congregations || orgData.generalInfo.congregations.length === 0) && (
-                            <p className="text-[9px] text-white/60 mt-1 italic">Nenhuma congregação cadastrada.</p>
+                            <div className="mt-2 text-center">
+                                <p className="text-[9px] text-white/60 italic mb-2">Nenhuma congregação cadastrada.</p>
+                                <button onClick={() => handleSync('down')} className="text-[10px] font-bold bg-white text-brand-600 px-3 py-1.5 rounded-lg w-full flex items-center justify-center gap-1 hover:bg-brand-50 transition-colors shadow-sm">
+                                    <RefreshCw size={10} className={syncStatus === 'syncing' ? 'animate-spin' : ''} />
+                                    Não encontrou dados?
+                                </button>
+                            </div>
                         )}
                       </div> )}
                    </div>
