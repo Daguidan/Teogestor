@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SecureStorage } from './storage';
 import { CryptoService } from './crypto';
-// FIX: Import CloudConfig from shared types and remove local definition.
 import { CloudConfig } from '../types';
 
 // Chaves para armazenamento das credenciais
@@ -13,20 +12,19 @@ const TABLE_NAME = 'evento'; // NOME DA TABELA CENTRALIZADO
 let supabase: SupabaseClient | null = null;
 let encryptionPassword = '';
 
-// Helper para limpar e corrigir URL
+// Helper para limpar e corrigir URL de forma agressiva
 const cleanUrl = (url: string) => {
     if (!url) return '';
-    let cleaned = url.trim();
+    // Remove TODOS os espaços em branco, quebras de linha e caracteres invisíveis (zero-width spaces)
+    let cleaned = url.replace(/\s+/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
     
     // CASO 1: Usuário colou a URL do Dashboard (Erro comum)
-    // Ex: https://supabase.com/dashboard/project/abcdefghijklm
     const dashboardMatch = cleaned.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/);
     if (dashboardMatch && dashboardMatch[1]) {
         return `https://${dashboardMatch[1]}.supabase.co`;
     }
 
     // CASO 2: Usuário colou apenas o Project ID (ex: kckyrfuczbhifvuwnfnh)
-    // IDs do Supabase geralmente têm 20 caracteres alfanuméricos
     if (/^[a-z0-9]{20}$/.test(cleaned)) {
         return `https://${cleaned}.supabase.co`;
     }
@@ -57,7 +55,7 @@ export const CloudService = {
       try {
         supabase = createClient(url, key, {
             auth: {
-                persistSession: false, // Evita problemas de localStorage com sessão de usuário
+                persistSession: false,
                 autoRefreshToken: false,
                 detectSessionInUrl: false
             }
