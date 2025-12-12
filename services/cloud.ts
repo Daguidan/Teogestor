@@ -113,7 +113,7 @@ export const CloudService = {
         
         if (error) {
             if (error.code === '42P01') { // Código PostgreSQL para "tabela não existe"
-                return { success: false, error: 'A tabela "evento" não existe. Verifique o Script SQL.' };
+                return { success: false, error: 'A tabela "evento" não existe. Use o botão "Script SQL" na configuração.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
