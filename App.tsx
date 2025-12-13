@@ -149,6 +149,7 @@ export const App: React.FC = () => {
   const [dataLoaded, setDataLoaded] = useState(false); // Flag to control auto-save start
 
   const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false); // Loading state for login sync
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
 
   const [showCloudModal, setShowCloudModal] = useState(false);
@@ -201,10 +202,44 @@ export const App: React.FC = () => {
       setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Helper function to process loaded cloud data and update state
+  const processCloudData = (eventId: string, cloudData: any) => {
+      if (!cloudData) return;
+
+      if (cloudData.type) {
+          const type = cloudData.type as EventType;
+          setSelectedEventType(type);
+          SecureStorage.setItem(`${eventId}_last_event_type`, type);
+      }
+
+      if (cloudData.org) {
+          const isConvention = cloudData.type === 'REGIONAL_CONVENTION';
+          const structKey = isConvention ? `${eventId}_CONVENTION_structure` : `${eventId}_structure`;
+          SecureStorage.setItem(structKey, cloudData.org);
+          setOrgData(cloudData.org);
+      }
+      
+      if (cloudData.program) {
+          setProgram(cloudData.program as AssemblyProgram);
+          SecureStorage.setItem(`${eventId}_program_${cloudData.program.type}`, cloudData.program);
+      }
+
+      if (cloudData.notes) {
+          setNotes(cloudData.notes);
+          SecureStorage.setItem(`${eventId}_notes`, cloudData.notes);
+      }
+
+      if (cloudData.attendance) {
+          setAttendance(cloudData.attendance);
+          SecureStorage.setItem(`${eventId}_attendance`, cloudData.attendance);
+      }
+  };
+
   const handleOpenCloudModal = () => {
-      // Clear previous connection errors when opening the modal to reduce confusion
+      // Clear previous connection errors when opening the modal
       setEventsError('');
       
+      // RELOAD Config from Storage to ensure inputs are populated
       const config = CloudService.getConfig();
       if (config) {
           setCloudUrl(config.url);
@@ -272,26 +307,7 @@ export const App: React.FC = () => {
             }
 
             if (res.data) {
-                // Determine event type first
-                let type = res.data.type as EventType;
-                if (type) {
-                    setSelectedEventType(type);
-                    SecureStorage.setItem(`${eventId}_last_event_type`, type);
-                } else {
-                    type = 'BETHEL_REP'; 
-                }
-
-                if (res.data.org) {
-                    setOrgData(res.data.org as OrgStructure);
-                    const isConventionType = type === 'REGIONAL_CONVENTION';
-                    const structKey = isConventionType ? `${eventId}_CONVENTION_structure` : `${eventId}_structure`;
-                    SecureStorage.setItem(structKey, res.data.org);
-                }
-                
-                if (res.data.program) {
-                    setProgram(res.data.program as AssemblyProgram);
-                    SecureStorage.setItem(`${eventId}_program_${res.data.program.type}`, res.data.program);
-                }
+                processCloudData(eventId, res.data);
             }
         } catch (e) {
             console.error("Pre-load failed", e);
@@ -1150,7 +1166,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (e: React.FormEvent, role: UserRole) => {
+  const handleLogin = async (e: React.FormEvent, role: UserRole) => {
     e.preventDefault();
     setLoginError('');
 
@@ -1172,6 +1188,47 @@ export const App: React.FC = () => {
              return;
          }
       }
+    }
+
+    setLoginLoading(true);
+
+    try {
+        // --- AUTO-RESTORE FROM CLOUD (If Local is Empty) ---
+        // Se for admin, verificamos se há config de nuvem e se os dados locais estão vazios.
+        // Se sim, tentamos baixar da nuvem antes de liberar o acesso.
+        if (role === 'admin') {
+            const config = CloudService.getConfig();
+            
+            // Check local existence first (to avoid unnecessary fetch)
+            const conventionKey = `${eventIdInput}_CONVENTION_structure`;
+            const assemblyKey = `${eventIdInput}_structure`;
+            const localExists = SecureStorage.getItem(conventionKey, null) || SecureStorage.getItem(assemblyKey, null);
+
+            if (config && !localExists) {
+                // Initialize cloud service explicitly
+                CloudService.configure(config.url, config.key, config.encryptionPass || '');
+                
+                // Show feedback to user (via toast or error area temporarily)
+                setLoginError("Buscando backup na nuvem... Aguarde.");
+                
+                const cloudRes = await CloudService.loadEvent(eventIdInput);
+                
+                if (cloudRes.data) {
+                    processCloudData(eventIdInput, cloudRes.data);
+                    // Update connection status in UI
+                    setCloudUrl(config.url);
+                    setCloudKey(config.key);
+                    setCloudPass(config.encryptionPass || '');
+                } else if (cloudRes.error) {
+                    console.error("Erro no auto-restore:", cloudRes.error);
+                    // Não bloqueamos o login, mas avisamos
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Erro no processo de login/restore", e);
+    } finally {
+        setLoginLoading(false);
     }
 
     const newSession: AuthSession = {
@@ -1436,7 +1493,7 @@ export const App: React.FC = () => {
         </p>
     </div>
     
-    <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-2xl transition-all shadow-xl text-lg flex items-center justify-center gap-3"><BookOpen size={24}/> Entrar no Meu Espaço</button></form><div className="bg-slate-50 p-5 border-t border-slate-100 flex justify-between items-center px-8"><span className="text-[10px] text-slate-300 font-bold tracking-widest">v{APP_CONFIG.APP_VERSION}</span><button onClick={() => setShowAdminModal(true)} className="text-slate-300 hover:text-slate-500 p-2"><Lock size={16}/></button></div>{showAdminModal && (<div className="absolute inset-0 bg-white z-20 flex flex-col animate-slide-up"><div className="bg-brand-900 p-8 text-white flex justify-between items-start"><div className="relative z-10"><h2 className="text-2xl font-bold">Acesso Restrito</h2><p className="text-brand-300 text-xs font-bold mt-1 uppercase">Gestão do Evento</p></div><button onClick={() => setShowAdminModal(false)} className="bg-white/10 p-2 rounded-full text-white"><X size={20}/></button></div><form onSubmit={(e) => handleLogin(e, 'admin')} className="flex-1 p-8 overflow-y-auto space-y-6"><div className="relative group"><User className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none font-bold text-slate-800 uppercase" placeholder="Ex: GO-003 A" value={loginEventId} onChange={e => setLoginEventId(e.target.value)}/></div><div className="relative group"><Users className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-medium" placeholder="Seu Nome" value={loginName} onChange={e => setLoginName(e.target.value)}/></div><div className="relative group"><Key className="absolute left-4 top-4 text-slate-300" size={20} /><input type={showPassword ? "text" : "password"} className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-bold tracking-widest text-lg" placeholder="••••••••" value={loginPin} onChange={e => setLoginPin(e.target.value)}/><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 focus:outline-none">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div><div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs text-slate-600 space-y-3 mt-4"><div className="flex items-center gap-2 text-brand-800 font-bold border-b border-slate-200 pb-2 mb-2"><ShieldCheck size={16}/> Política de Uso & Privacidade</div><p className="leading-relaxed text-[10px] text-justify text-slate-500"><strong>Atenção:</strong> Este não é um site oficial das Testemunhas de Jeová. Não possui vínculo com jw.org.</p><p className="leading-relaxed text-[10px] text-justify text-slate-500"><strong>Segurança:</strong> Todos os dados são <strong>Criptografados</strong> e armazenados localmente.</p><label className="flex items-start gap-3 pt-3 border-t border-slate-200 cursor-pointer group"><input type="checkbox" className="peer sr-only" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)}/><div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-brand-900 peer-checked:border-brand-900 flex items-center justify-center bg-white"><CheckSquare size={12} className="text-white opacity-0 peer-checked:opacity-100" /></div><span className="text-[11px] font-bold text-slate-600 group-hover:text-brand-900 select-none">Li e concordo com a política de privacidade.</span></label></div><button disabled={!acceptedTerms} type="submit" className="w-full bg-brand-900 hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2"><Lock size={20}/> Entrar no Sistema</button></form></div>)}{showCloudModal && (
+    <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-2xl transition-all shadow-xl text-lg flex items-center justify-center gap-3"><BookOpen size={24}/> Entrar no Meu Espaço</button></form><div className="bg-slate-50 p-5 border-t border-slate-100 flex justify-between items-center px-8"><span className="text-[10px] text-slate-300 font-bold tracking-widest">v{APP_CONFIG.APP_VERSION}</span><button onClick={() => setShowAdminModal(true)} className="text-slate-300 hover:text-slate-500 p-2"><Lock size={16}/></button></div>{showAdminModal && (<div className="absolute inset-0 bg-white z-20 flex flex-col animate-slide-up"><div className="bg-brand-900 p-8 text-white flex justify-between items-start"><div className="relative z-10"><h2 className="text-2xl font-bold">Acesso Restrito</h2><p className="text-brand-300 text-xs font-bold mt-1 uppercase">Gestão do Evento</p></div><button onClick={() => setShowAdminModal(false)} className="bg-white/10 p-2 rounded-full text-white"><X size={20}/></button></div><form onSubmit={(e) => handleLogin(e, 'admin')} className="flex-1 p-8 overflow-y-auto space-y-6"><div className="relative group"><User className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none font-bold text-slate-800 uppercase" placeholder="Ex: GO-003 A" value={loginEventId} onChange={e => setLoginEventId(e.target.value)}/></div><div className="relative group"><Users className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-medium" placeholder="Seu Nome" value={loginName} onChange={e => setLoginName(e.target.value)}/></div><div className="relative group"><Key className="absolute left-4 top-4 text-slate-300" size={20} /><input type={showPassword ? "text" : "password"} className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-bold tracking-widest text-lg" placeholder="••••••••" value={loginPin} onChange={e => setLoginPin(e.target.value)}/><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 focus:outline-none">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div><div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs text-slate-600 space-y-3 mt-4"><div className="flex items-center gap-2 text-brand-800 font-bold border-b border-slate-200 pb-2 mb-2"><ShieldCheck size={16}/> Política de Uso & Privacidade</div><p className="leading-relaxed text-[10px] text-justify text-slate-500"><strong>Atenção:</strong> Este não é um site oficial das Testemunhas de Jeová. Não possui vínculo com jw.org.</p><p className="leading-relaxed text-[10px] text-justify text-slate-500"><strong>Segurança:</strong> Todos os dados são <strong>Criptografados</strong> e armazenados localmente.</p><label className="flex items-start gap-3 pt-3 border-t border-slate-200 cursor-pointer group"><input type="checkbox" className="peer sr-only" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)}/><div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-brand-900 peer-checked:border-brand-900 flex items-center justify-center bg-white"><CheckSquare size={12} className="text-white opacity-0 peer-checked:opacity-100" /></div><span className="text-[11px] font-bold text-slate-600 group-hover:text-brand-900 select-none">Li e concordo com a política de privacidade.</span></label></div><button disabled={!acceptedTerms || loginLoading} type="submit" className="w-full bg-brand-900 hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2">{loginLoading ? <Loader2 size={20} className="animate-spin" /> : <Lock size={20}/>} {loginLoading ? 'Conectando...' : 'Entrar no Sistema'}</button></form></div>)}{showCloudModal && (
   <div className="fixed inset-0 bg-white/95 backdrop-blur-md z-[100] p-8 flex flex-col items-center justify-center animate-fade-in overflow-y-auto">
     <div className="w-full max-w-sm space-y-5">
       <div className="text-center">
