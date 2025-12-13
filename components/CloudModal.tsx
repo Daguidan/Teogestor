@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle } from 'lucide-react';
+import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy } from 'lucide-react';
 import { CloudService } from '../services/cloud';
 
 interface CloudModalProps {
@@ -27,6 +27,7 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   const [showCloudPass, setShowCloudPass] = useState(false);
   const [showSqlHelp, setShowSqlHelp] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState('');
 
   const handleDisconnectCloud = () => {
     if(confirm('Tem certeza que deseja desconectar?')) {
@@ -54,9 +55,8 @@ export const CloudModal: React.FC<CloudModalProps> = ({
         } else {
             const msg = result.error || 'Erro desconhecido';
             setErrorMsg(msg);
-            if (msg.includes('tabela') || msg.includes('42P01') || msg.includes('row level security')) {
-                setShowSqlHelp(true);
-            }
+            // Sempre mostra o script SQL se der erro, pois 99% das vezes é falta da tabela ou RLS
+            setShowSqlHelp(true);
         }
     } else { 
         setIsTestingCloud(false); 
@@ -65,23 +65,32 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   };
 
   const getSqlScript = () => {
-    return `-- 1. Cria a tabela 'evento' (se não existir)
-create table if not exists evento (
-id text primary key,
-updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-data jsonb
+    return `-- SCRIPT DEFINITIVO (Rode no SQL Editor do Supabase)
+
+-- 1. Limpa instalações anteriores (CUIDADO: Apaga dados existentes na nuvem)
+DROP TABLE IF EXISTS evento;
+
+-- 2. Cria a tabela correta
+CREATE TABLE public.evento (
+    id text PRIMARY KEY,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    data jsonb
 );
 
--- 2. Habilita segurança (RLS)
-alter table evento enable row level security;
+-- 3. Habilita segurança (RLS)
+ALTER TABLE public.evento ENABLE ROW LEVEL SECURITY;
 
--- 3. Limpa políticas antigas para evitar conflitos
-drop policy if exists "Acesso Publico" on evento;
-drop policy if exists "Public Access" on evento;
-drop policy if exists "Allow Public Access" on evento;
+-- 4. Cria política de acesso TOTAL (Necessário para o App funcionar sem login de usuário)
+CREATE POLICY "Acesso Total App" ON public.evento
+FOR ALL
+USING (true)
+WITH CHECK (true);`;
+  };
 
--- 4. Cria política de acesso total (Leitura/Escrita)
-create policy "Acesso Publico" on evento for all using (true) with check (true);`;
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(getSqlScript());
+    setCopyFeedback('Copiado!');
+    setTimeout(() => setCopyFeedback(''), 2000);
   };
 
   return (
@@ -98,8 +107,13 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
 
         <div className="p-6 space-y-4 overflow-y-auto">
             {errorMsg && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold border border-red-100 flex items-start gap-2">
-                    <AlertTriangle size={16} className="shrink-0 mt-0.5"/> <span>{errorMsg}</span>
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold border border-red-100 flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                        <AlertTriangle size={16} className="shrink-0 mt-0.5"/> <span>{errorMsg}</span>
+                    </div>
+                    {errorMsg.includes('acordando') && (
+                        <p className="text-[10px] text-red-500 ml-6">O projeto gratuito do Supabase "dorme" após inatividade. Aguarde alguns segundos e tente novamente.</p>
+                    )}
                 </div>
             )}
 
@@ -139,10 +153,16 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
             </div>
 
             {showSqlHelp && (
-            <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative mt-2">
+            <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative mt-2 animate-fade-in">
                 <button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button>
-                <p className="text-slate-400 mb-2 border-b border-slate-700 pb-2 font-bold">SQL Setup (Copie e rode no Supabase):</p>
-                <pre className="whitespace-pre-wrap select-all text-emerald-400">{getSqlScript()}</pre>
+                <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
+                    <p className="text-slate-400 font-bold">SQL Setup (Definitivo):</p>
+                    <button onClick={handleCopySql} className="text-[9px] bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded flex items-center gap-1 text-white transition-colors">
+                        {copyFeedback ? <CheckCircle2 size={10}/> : <Copy size={10}/>} {copyFeedback || 'Copiar'}
+                    </button>
+                </div>
+                <pre className="whitespace-pre-wrap select-all text-emerald-400 font-bold">{getSqlScript()}</pre>
+                <p className="text-[9px] text-slate-500 mt-2 italic">Cole isso no "SQL Editor" do seu projeto Supabase e clique em "Run".</p>
             </div>
             )}
 
@@ -151,8 +171,8 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
                     {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : <CheckCircle2 size={18}/>}
                     {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
                 </button>
-                <button onClick={() => setShowSqlHelp(!showSqlHelp)} className="w-full py-3 text-brand-600 bg-white border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-50 flex items-center justify-center gap-1 transition-colors">
-                    <Database size={14}/> {showSqlHelp ? 'Ocultar Script SQL' : 'Ver Script SQL (Configuração Inicial)'}
+                <button onClick={() => setShowSqlHelp(!showSqlHelp)} className={`w-full py-3 border rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors ${showSqlHelp ? 'bg-slate-100 text-slate-600 border-slate-200' : 'text-brand-600 bg-white border-brand-100 hover:bg-brand-50'}`}>
+                    <Database size={14}/> {showSqlHelp ? 'Ocultar Script SQL' : 'Ver Script SQL de Configuração'}
                 </button>
             </div>
         </div>
