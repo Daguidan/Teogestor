@@ -4,7 +4,6 @@ import {
   OrgStructure, 
   AssemblyProgram, 
   EventType, 
-  UserRole,
   SuggestionEntry,
   VolunteerData,
   ProviderEventInfo
@@ -16,10 +15,13 @@ import {
   PROGRAM_BETHEL, 
   PROGRAM_CO, 
   PROGRAM_CONVENTION,
-  TEMPLATE_EVENT_IDS
+  TEMPLATE_EVENT_IDS,
+  DEFAULT_SECTORS
 } from './constants';
 import { SecureStorage } from './services/storage';
 import { CloudService } from './services/cloud';
+
+// Importação dos Componentes
 import { Organogram } from './components/Organogram';
 import { Program } from './components/Program';
 import { CleaningManagement } from './components/CleaningManagement';
@@ -28,61 +30,17 @@ import { GeneralInfo } from './components/GeneralInfo';
 import { Cover } from './components/Cover';
 import { ParkingManagement } from './components/ParkingManagement';
 import { SharingCenter } from './components/SharingCenter';
-import { 
-  User, 
-  Lock, 
-  Cloud, 
-  Key, 
-  Share2, 
-  Layout, 
-  Settings,
-  AlertTriangle,
-  ChevronDown,
-  Smartphone,
-  Home,
-  Grid,
-  Users,
-  X,
-  BookOpen,
-  LogOut as LogoutIcon,
-  PenTool,
-  Link as LinkIcon,
-  ShieldCheck,
-  CheckSquare,
-  Sparkles,
-  Heart,
-  Copy,
-  Eye,
-  EyeOff,
-  Briefcase,
-  Car,
-  UserCheck,
-  Send,
-  Sun,
-  Moon,
-  CheckCircle2,
-  Megaphone,
-  Phone,
-  Server,
-  Plus,
-  ArrowLeft,
-  RefreshCw,
-  Download,
-  Loader2,
-  Database,
-  Info,
-  MapPin,
-  Check,
-  Building2,
-  CloudOff,
-  CopyPlus,
-  Unplug,
-  Wifi,
-  ArrowRight
-} from 'lucide-react';
-import { DEFAULT_SECTORS } from './constants';
+import { CloudModal } from './components/CloudModal';
+import { AuthScreens } from './components/AuthScreens';
+import { Header } from './components/Header';
 
-// --- HELPER FUNCTIONS ---
+import { 
+  Layout, AlertTriangle, ChevronDown, Grid, Users, BookOpen, 
+  PenTool, Link as LinkIcon, Sparkles, Heart, Copy, Car, UserCheck, 
+  Send, Sun, Moon, Megaphone, Phone, Server, Plus, RefreshCw, 
+  Info, MapPin, Check, Building2, CopyPlus, ArrowRight,
+  Settings, Briefcase, Lock, Loader2, Share2, ArrowLeft, X
+} from 'lucide-react';
 
 const normalizeString = (str: string): string => {
   if (!str) return '';
@@ -102,20 +60,17 @@ const isOrgEmpty = (org: OrgStructure | null) => {
 };
 
 const findDepartmentByName = (org: OrgStructure, deptName: string) => {
-  const allDepts = [
-    ...(org.aoDepartments || []),
-    ...(org.aaoDepartments || []),
-    ...(org.coordDepartments || []),
-    ...(org.progDepartments || []),
-    ...(org.roomDepartments || [])
+  const allDepts = [ 
+    ...(org.aoDepartments || []), 
+    ...(org.aaoDepartments || []), 
+    ...(org.coordDepartments || []), 
+    ...(org.progDepartments || []), 
+    ...(org.roomDepartments || []) 
   ];
   return allDepts.find(d => d.name === deptName);
 };
 
-// --- MAIN COMPONENT ---
-
 export const App: React.FC = () => {
-  // STATE
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   
   const isAdmin = useMemo(() => authSession?.role === 'admin', [authSession]);
@@ -129,14 +84,8 @@ export const App: React.FC = () => {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [attendance, setAttendance] = useState<Record<string, string>>({});
 
-  const [showAdminModal, setShowAdminModal] = useState(false);
   const [loginEventId, setLoginEventId] = useState('');
-  const [loginName, setLoginName] = useState(''); 
-  const [loginPin, setLoginPin] = useState('');
   const [isDirectLink, setIsDirectLink] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showCloudPass, setShowCloudPass] = useState(false);
   
   const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
@@ -145,16 +94,12 @@ export const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  const [loginError, setLoginError] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
 
   const [showCloudModal, setShowCloudModal] = useState(false);
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudKey, setCloudKey] = useState('');
   const [cloudPass, setCloudPass] = useState('');
-  const [isTestingCloud, setIsTestingCloud] = useState(false);
-  const [showSqlHelp, setShowSqlHelp] = useState(false);
   
   const [providerEventList, setProviderEventList] = useState<ProviderEventInfo[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -196,26 +141,6 @@ export const App: React.FC = () => {
       setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const getSqlScript = () => {
-      return `-- 1. Cria a tabela 'evento' (se não existir)
-create table if not exists evento (
-  id text primary key,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  data jsonb
-);
-
--- 2. Habilita segurança (RLS)
-alter table evento enable row level security;
-
--- 3. Limpa políticas antigas para evitar conflitos
-drop policy if exists "Acesso Publico" on evento;
-drop policy if exists "Public Access" on evento;
-drop policy if exists "Allow Public Access" on evento;
-
--- 4. Cria política de acesso total (Leitura/Escrita)
-create policy "Acesso Publico" on evento for all using (true) with check (true);`;
-  };
-
   const processCloudData = (eventId: string, cloudData: any) => {
       if (!cloudData) return;
       const params = new URLSearchParams(window.location.search);
@@ -251,23 +176,25 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
   };
 
   const handleOpenCloudModal = () => {
-      setEventsError('');
-      const config = CloudService.getConfig();
-      if (config) {
-          setCloudUrl(config.url);
-          setCloudKey(config.key);
-          setCloudPass(config.encryptionPass || '');
+      try {
+          setEventsError('');
+          const config = CloudService.getConfig();
+          setCloudUrl(config?.url || '');
+          setCloudKey(config?.key || '');
+          setCloudPass(config?.encryptionPass || '');
+      } catch (error) {
+          setCloudUrl(''); setCloudKey(''); setCloudPass('');
+      } finally {
+          setShowCloudModal(true);
       }
-      setShowCloudModal(true);
   };
 
-  const handleDisconnectCloud = () => {
-      if(confirm('Tem certeza que deseja desconectar?')) {
-          CloudService.disconnect();
-          setCloudUrl(''); setCloudKey(''); setCloudPass('');
-          setShowCloudModal(false);
-          showToast('Nuvem desconectada.', 'success');
-      }
+  const handleCloudSuccess = () => {
+      setShowCloudModal(false); 
+      setSyncStatus('idle'); 
+      setEventsError('');
+      showToast("✅ Conexão estabelecida!", 'success');
+      if (authSession?.isSuperAdmin) fetchProviderEvents();
   };
   
   const handleQuickReconnect = async () => {
@@ -376,8 +303,8 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
 
   const handleLogout = () => {
     setAuthSession(null); setOrgData(INITIAL_STRUCTURE); setProgram(PROGRAM_BETHEL); setNotes({}); setAttendance({});
-    setLoginPin(''); setLoginError(''); setShowTypeSelection(false); setSelectedEventType(null); setShowAdminModal(false); 
-    setAcceptedTerms(false); setConfirmedVolunteer(null); setIsDisambiguationRequired(false); setSelectedUserCongId('');
+    setShowTypeSelection(false); setSelectedEventType(null); 
+    setConfirmedVolunteer(null); setIsDisambiguationRequired(false); setSelectedUserCongId('');
     setView('dashboard'); setDataLoaded(false); 
     SecureStorage.setItem('active_session', null); SecureStorage.setItem('user_congregation_id', '');
     const params = new URLSearchParams(window.location.search);
@@ -588,24 +515,6 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
       if (authSession) { SecureStorage.setItem(`${authSession.eventId}_last_event_type`, newType); SecureStorage.setItem(`${authSession.eventId}_program_${newType}`, newProg); }
       showToast('Programa redefinido para o padrão correto!', 'success');
   };
-
-  const handleCloudConfigSave = async () => { 
-      if (!cloudUrl || !cloudKey || !cloudPass) { showToast("Preencha URL, API Key e a Senha.", 'error'); return; }
-      setIsTestingCloud(true);
-      if (CloudService.configure(cloudUrl, cloudKey, cloudPass)) { 
-          const result = await CloudService.testConnection();
-          setIsTestingCloud(false);
-          if (result.success) {
-              setShowCloudModal(false); setSyncStatus('idle'); setEventsError('');
-              showToast("✅ Conexão estabelecida!", 'success');
-              if (authSession?.isSuperAdmin) fetchProviderEvents();
-          } else {
-              const errorMsg = result.error || 'Erro desconhecido';
-              showToast(`⚠️ ${errorMsg}`, 'error');
-              if (errorMsg.includes('tabela') || errorMsg.includes('42P01') || errorMsg.includes('row level security')) setShowSqlHelp(true);
-          }
-      } else { setIsTestingCloud(false); showToast("Erro ao salvar configuração local.", 'error'); }
-  };
   
   const handleSync = async (direction: 'up' | 'down') => {
     if (!authSession) return; 
@@ -707,42 +616,84 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
       return depts;
   }, [confirmedVolunteer, orgData]);
   const hasOverseerPrivileges = myOverseerDepartments.length > 0;
+  
   const unreadSuggestionsCount = useMemo(() => orgData.generalInfo?.suggestions?.length || 0, [orgData.generalInfo?.suggestions]);
 
-  const handleLogin = async (e: React.FormEvent, role: UserRole) => {
-    e.preventDefault(); setLoginError('');
-    const eventIdInput = loginEventId.trim().toUpperCase();
-    if (!eventIdInput) { setLoginError('Informe o ID.'); return; }
-    if (role === 'admin') {
-      if (eventIdInput === 'MASTER' && loginPin !== APP_CONFIG.MASTER_PIN) { setLoginError('Senha Mestra incorreta.'); return; }
-      else if (eventIdInput !== 'MASTER' && loginPin !== APP_CONFIG.ADMIN_PIN) { setLoginError('PIN incorreto.'); return; }
+  // FIX: Added missing variables for public dashboard view
+  const publicAnnouncements = orgData.generalInfo?.publicAnnouncements || '';
+
+  const selectedCong = useMemo(() => {
+    if (!selectedUserCongId || !orgData.generalInfo?.congregations) return null;
+    return orgData.generalInfo.congregations.find(c => c.id === selectedUserCongId) || null;
+  }, [selectedUserCongId, orgData.generalInfo?.congregations]);
+
+  const myOrganogramAssignments = useMemo(() => {
+    if (!confirmedVolunteer) return [];
+    const assignments: { dept: string; role: string }[] = [];
+    const phone = normalizePhone(confirmedVolunteer.phone);
+    if (!phone) return [];
+
+    // Helper to check
+    const check = (p: any, roleName: string, deptName: string) => {
+       if (p && normalizePhone(p.phone) === phone) assignments.push({ dept: deptName, role: roleName });
+    };
+
+    // Committee
+    if (orgData.committee) {
+        const c = orgData.committee;
+        check(c.president, 'Presidente', 'Comissão');
+        check(c.assemblyOverseer, 'Sup. Assembleia', 'Comissão');
+        check(c.assistantAssemblyOverseer, 'Ajudante', 'Comissão');
+        check(c.presidentAssistant1, 'Assistente', 'Comissão');
+        check(c.presidentAssistant2, 'Assistente', 'Comissão');
+        check(c.conventionCoordinator, 'Coord. Congresso', 'Comissão');
+        check(c.assistantCoordinator, 'Assis. Coord.', 'Comissão');
+        check(c.conventionProgramOverseer, 'Sup. Programa', 'Comissão');
+        check(c.assistantProgramOverseer, 'Assis. Programa', 'Comissão');
+        check(c.conventionRoomingOverseer, 'Sup. Hospedagem', 'Comissão');
+        check(c.assistantRoomingOverseer, 'Assis. Hospedagem', 'Comissão');
     }
-    setLoginLoading(true);
-    try {
-        if (role === 'admin') {
-            const config = CloudService.getConfig();
-            const conventionKey = `${eventIdInput}_CONVENTION_structure`;
-            const assemblyKey = `${eventIdInput}_structure`;
-            const localExists = SecureStorage.getItem(conventionKey, null) || SecureStorage.getItem(assemblyKey, null);
-            if (config && !localExists) {
-                CloudService.configure(config.url, config.key, config.encryptionPass || '');
-                const cloudRes = await CloudService.loadEvent(eventIdInput);
-                if (cloudRes.data) processCloudData(eventIdInput, cloudRes.data);
-            }
-        }
-    } catch (e) { console.error("Erro login", e); } finally { setLoginLoading(false); }
-    const newSession: AuthSession = { eventId: eventIdInput, role: role, timestamp: Date.now(), userName: loginName || (role === 'admin' ? 'Administrador' : 'Visitante'), isSuperAdmin: eventIdInput === 'MASTER' };
-    setAuthSession(newSession); SecureStorage.setItem('active_session', newSession); setShowAdminModal(false); setLoginPin(''); setLoginError('');
+    
+    // Departments
+    const checkDept = (depts: any[]) => {
+        depts?.forEach(d => {
+            check(d.overseer, 'Encarregado', d.name);
+            d.assistants.forEach((a: any, i: number) => check(a, `Assistente ${i+1}`, d.name));
+        });
+    };
+    
+    checkDept(orgData.aoDepartments || []);
+    checkDept(orgData.aaoDepartments || []);
+    checkDept(orgData.coordDepartments || []);
+    checkDept(orgData.progDepartments || []);
+    checkDept(orgData.roomDepartments || []);
+
+    return assignments;
+  }, [confirmedVolunteer, orgData]);
+
+  const hasOrganogramRole = myOrganogramAssignments.length > 0;
+
+  const myAttendantAssignments = useMemo(() => {
+     if (!confirmedVolunteer || !orgData.attendantsData) return [];
+     const phone = normalizePhone(confirmedVolunteer.phone);
+     if (!phone) return [];
+     const result: any[] = [];
+     
+     orgData.attendantsData.forEach(att => {
+        if (normalizePhone(att.morning_vol1_phone || '') === phone) result.push({ sectorId: att.sectorId, customName: att.customName, period: 'Manhã (Vol 1)', rawPeriod: 'morning', canReport: true });
+        if (normalizePhone(att.morning_vol2_phone || '') === phone) result.push({ sectorId: att.sectorId, customName: att.customName, period: 'Manhã (Vol 2)', rawPeriod: 'morning', canReport: true });
+        if (normalizePhone(att.afternoon_vol1_phone || '') === phone) result.push({ sectorId: att.sectorId, customName: att.customName, period: 'Tarde (Vol 1)', rawPeriod: 'afternoon', canReport: true });
+        if (normalizePhone(att.afternoon_vol2_phone || '') === phone) result.push({ sectorId: att.sectorId, customName: att.customName, period: 'Tarde (Vol 2)', rawPeriod: 'afternoon', canReport: true });
+     });
+     
+     return result;
+  }, [confirmedVolunteer, orgData.attendantsData]);
+
+  const handleLogin = (session: AuthSession) => {
+    setAuthSession(session);
+    SecureStorage.setItem('active_session', session);
   };
 
-  const handleRepairSession = (type: 'ASSEMBLY' | 'CONVENTION') => {
-    if (!authSession) return;
-    const repairedSession = { ...authSession, managementType: type };
-    setAuthSession(repairedSession); SecureStorage.setItem('active_session', repairedSession); setIsRepairingSession(false);
-    if (type === 'CONVENTION') setSelectedEventType('REGIONAL_CONVENTION'); else setShowTypeSelection(true);
-  };
-
-  const handleSelectEventType = (type: EventType) => { setSelectedEventType(type); if (authSession) SecureStorage.setItem(`${authSession.eventId}_last_event_type`, type); setShowTypeSelection(false); };
   const handleReturnToProviderPanel = () => { const masterSession: AuthSession = { eventId: 'MASTER', role: 'admin', timestamp: Date.now(), userName: 'Provedor Master', isSuperAdmin: true }; setAuthSession(masterSession); SecureStorage.setItem('active_session', masterSession); setSelectedEventType(null); };
   const handleCongregationSelect = (congId: string) => { setSelectedUserCongId(congId); SecureStorage.setItem('user_congregation_id', congId); setConfirmedVolunteer(null); setIsDisambiguationRequired(!!congId); };
   
@@ -781,33 +732,38 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
   };
 
   const openReportModal = (sectorId: string, period: 'morning' | 'afternoon') => { setReportSectorId(sectorId); setReportPeriod(period); setReportValue(''); setShowReportModal(true); };
-  const publicAnnouncements = orgData.generalInfo?.publicAnnouncements || '';
-  const selectedCong = useMemo(() => orgData.generalInfo?.congregations?.find(c => c.id === selectedUserCongId), [orgData.generalInfo, selectedUserCongId]);
-  const myAttendantAssignments = useMemo(() => { if (!confirmedVolunteer) return []; const assignments: any[] = []; const normalizedPhone = normalizePhone(confirmedVolunteer.phone); orgData.attendantsData?.forEach(att => { if (normalizePhone(att.morning_vol1_phone || '') === normalizedPhone || normalizePhone(att.morning_vol2_phone || '') === normalizedPhone) assignments.push({ sectorId: att.sectorId, customName: att.customName, period: 'Manhã', rawPeriod: 'morning', canReport: true }); if (normalizePhone(att.afternoon_vol1_phone || '') === normalizedPhone || normalizePhone(att.afternoon_vol2_phone || '') === normalizedPhone) assignments.push({ sectorId: att.sectorId, customName: att.customName, period: 'Tarde', rawPeriod: 'afternoon', canReport: true }); }); return assignments; }, [confirmedVolunteer, orgData.attendantsData]);
-  const myOrganogramAssignments = useMemo(() => { if (!confirmedVolunteer) return []; const assignments: any[] = []; const normalizedPhone = normalizePhone(confirmedVolunteer.phone); const checkDept = (list: any[]) => { list.forEach(d => { if (d.overseer && normalizePhone(d.overseer.phone) === normalizedPhone) assignments.push({ dept: d.name, role: 'Encarregado' }); d.assistants.forEach((a: any, idx: number) => { if (a && normalizePhone(a.phone) === normalizedPhone) assignments.push({ dept: d.name, role: `Assistente ${idx + 1}` }); }); }); }; checkDept(orgData.aoDepartments || []); checkDept(orgData.aaoDepartments || []); checkDept(orgData.coordDepartments || []); checkDept(orgData.progDepartments || []); checkDept(orgData.roomDepartments || []); orgData.parkingData?.forEach(p => { if ((p.morningVol1 && normalizePhone(p.morningVol1.phone) === normalizedPhone) || (p.morningVol2 && normalizePhone(p.morningVol2.phone) === normalizedPhone)) assignments.push({ dept: `Estacionamento - ${p.name}`, role: 'Voluntário (Manhã)' }); if ((p.afternoonVol1 && normalizePhone(p.afternoonVol1.phone) === normalizedPhone) || (p.afternoonVol2 && normalizePhone(p.afternoonVol2.phone) === normalizedPhone)) assignments.push({ dept: `Estacionamento - ${p.name}`, role: 'Voluntário (Tarde)' }); }); return assignments; }, [confirmedVolunteer, orgData]);
-  const hasOrganogramRole = myOrganogramAssignments.length > 0;
-
+  
   if (isInitializing) return ( <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4"><div className="w-16 h-16 border-4 border-brand-200 border-t-brand-500 rounded-full animate-spin mb-6 shadow-lg shadow-brand-200/50"></div><p className="text-slate-500 font-extrabold text-lg animate-pulse tracking-wide uppercase">Iniciando Sistema...</p></div> );
 
   if (!authSession) {
-    return ( <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden"><div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-100/40 rounded-full blur-[100px] pointer-events-none"></div><div className="max-w-md w-full bg-white/90 backdrop-blur-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-fade-in border border-white/60 relative z-10"><div className="bg-gradient-to-br from-brand-500 to-brand-600 p-8 text-center text-white relative"><Layout size={42} className="mx-auto mb-3 drop-shadow-md" /><h1 className="text-2xl font-extrabold">TeoGestor</h1><p className="text-brand-50 text-xs mt-1 font-bold">Gestão Teocrática Inteligente</p></div><form onSubmit={(e) => handleLogin(e, 'public')} className="p-8 space-y-6">{isDirectLink ? (<div className="text-center pb-4"><p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3">Acessando Evento</p><div className="inline-flex items-center gap-3 px-6 py-3 bg-brand-50 text-brand-700 rounded-full font-bold text-xl border border-brand-100"><LinkIcon size={20}/> {loginEventId}</div></div>) : (<div className="relative group"><User className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" required className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-brand-500 outline-none font-bold text-slate-800 uppercase text-lg" placeholder="EVENTO (Ex: GO-003 A)" value={loginEventId} onChange={e => setLoginEventId(e.target.value)} list="local-events"/><datalist id="local-events">{availableEvents.map(ev => <option key={ev} value={ev} />)}</datalist></div>)}<div className="relative group"><Users className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-brand-500 outline-none text-slate-800 font-semibold" placeholder="Seu Nome" value={loginName} onChange={e => setLoginName(e.target.value)}/></div>{loginError && <div className="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-2xl flex items-center gap-3 border border-red-100"><AlertTriangle size={18}/> {loginError}</div>}<button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-2xl transition-all shadow-xl text-lg flex items-center justify-center gap-3"><BookOpen size={24}/> Entrar no Meu Espaço</button></form><div className="bg-slate-50 p-5 border-t border-slate-100 flex justify-between items-center px-8"><span className="text-[10px] text-slate-300 font-bold tracking-widest">v{APP_CONFIG.APP_VERSION}</span><button onClick={() => setShowAdminModal(true)} className="text-slate-300 hover:text-slate-500 p-2"><Lock size={16}/></button></div>{showAdminModal && (<div className="absolute inset-0 bg-white z-20 flex flex-col animate-slide-up"><div className="bg-brand-900 p-8 text-white flex justify-between items-start"><div className="relative z-10"><h2 className="text-2xl font-bold">Acesso Restrito</h2><p className="text-brand-300 text-xs font-bold mt-1 uppercase">Gestão do Evento</p></div><button onClick={() => setShowAdminModal(false)} className="bg-white/10 p-2 rounded-full text-white"><X size={20}/></button></div><form onSubmit={(e) => handleLogin(e, 'admin')} className="flex-1 p-8 overflow-y-auto space-y-6"><div className="relative group"><User className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none font-bold text-slate-800 uppercase" placeholder="Ex: GO-003 A" value={loginEventId} onChange={e => setLoginEventId(e.target.value)}/></div><div className="relative group"><Users className="absolute left-4 top-4 text-slate-300" size={20} /><input type="text" className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-medium" placeholder="Seu Nome" value={loginName} onChange={e => setLoginName(e.target.value)}/></div><div className="relative group"><Key className="absolute left-4 top-4 text-slate-300" size={20} /><input type={showPassword ? "text" : "password"} className="w-full pl-12 pr-12 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-brand-600 outline-none text-slate-800 font-bold tracking-widest text-lg" placeholder="••••••••" value={loginPin} onChange={e => setLoginPin(e.target.value)}/><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 focus:outline-none">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div><div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs text-slate-600 space-y-3 mt-4"><div className="flex items-center gap-2 text-brand-800 font-bold border-b border-slate-200 pb-2 mb-2"><ShieldCheck size={16}/> Política de Uso & Privacidade</div><p className="leading-relaxed text-[10px] text-justify text-slate-500"><strong>Atenção:</strong> Este não é um site oficial das Testemunhas de Jeová.</p><label className="flex items-start gap-3 pt-3 border-t border-slate-200 cursor-pointer group"><input type="checkbox" className="peer sr-only" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)}/><div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-brand-900 peer-checked:border-brand-900 flex items-center justify-center bg-white"><CheckSquare size={12} className="text-white opacity-0 peer-checked:opacity-100" /></div><span className="text-[11px] font-bold text-slate-600 group-hover:text-brand-900 select-none">Li e concordo com a política de privacidade.</span></label></div><button disabled={!acceptedTerms || loginLoading} type="submit" className="w-full bg-brand-900 hover:bg-black disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2">{loginLoading ? <Loader2 size={20} className="animate-spin" /> : <Lock size={20}/>} {loginLoading ? 'Conectando...' : 'Entrar no Sistema'}</button></form></div>)}{showCloudModal && (<div className="fixed inset-0 bg-white/95 backdrop-blur-md z-[100] p-8 flex flex-col items-center justify-center animate-fade-in overflow-y-auto"><div className="w-full max-w-sm space-y-5"><div className="text-center"><div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border shadow-sm ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-brand-50 text-brand-600 border-brand-100'}`}><Cloud size={32}/></div><h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3><p className="text-xs text-slate-500 mt-1">Sincronize seus dados entre dispositivos.</p></div>{cloudUrl && (<div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle2 size={18} className="text-emerald-500"/><span className="text-xs font-bold text-emerald-800">Conectado</span></div><button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1 rounded border border-red-100 hover:bg-red-50 flex items-center gap-1"><Unplug size={10}/> Desconectar</button></div>)}<div className="space-y-3"><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Project URL</label><input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => setCloudUrl(e.target.value)} /></div><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">API Key (anon public)</label><input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => setCloudKey(e.target.value)} /></div></div><div className="bg-amber-50 p-4 rounded-xl border border-amber-100 relative"><label className="block text-[10px] font-bold text-amber-700 uppercase mb-2 flex items-center gap-1"><Key size={12}/> Senha de Criptografia (Invente uma)</label><div className="relative"><input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 pr-10 text-sm font-mono outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" placeholder="Sua senha secreta..." value={cloudPass} onChange={e => setCloudPass(e.target.value)} /><button type="button" onClick={() => setShowCloudPass(!showCloudPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">{showCloudPass ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
-    {showSqlHelp && (<div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative"><button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button><p className="text-slate-400 mb-2 border-b border-slate-700 pb-2">Copie e cole no SQL Editor do Supabase:</p><pre className="whitespace-pre-wrap select-all">{getSqlScript()}</pre></div>)}
-    <div className="space-y-2 pt-2"><button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">{isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : null}{isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}</button><div className="flex gap-2"><button onClick={() => setShowSqlHelp(!showSqlHelp)} className="flex-1 py-3 text-brand-600 bg-brand-50 border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-100 flex items-center justify-center gap-1"><Database size={14}/> Script SQL</button><button onClick={() => setShowCloudModal(false)} disabled={isTestingCloud} className="flex-1 py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">Cancelar</button></div></div></div></div>)}
-    {toastMessage && (<div className={`fixed top-24 right-6 px-6 py-4 rounded-2xl shadow-2xl z-[150] animate-bounce-in flex items-center gap-3 font-bold text-sm ${toastMessage.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>{toastMessage.type === 'success' ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}{toastMessage.text}</div>)}
-    </div></div>)
+    return (
+        <AuthScreens 
+            onLogin={handleLogin}
+            availableEvents={availableEvents}
+            initialEventId={loginEventId}
+            isDirectLink={isDirectLink}
+        />
+    );
   }
-  
-  if (isRepairingSession) { return ( <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"><div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-4 animate-fade-in"><h2 className="text-center text-slate-800 font-extrabold mb-2 text-lg">Reparar Sessão</h2><button onClick={() => handleRepairSession('ASSEMBLY')} className="w-full p-4 bg-white border-2 border-slate-100 hover:border-brand-400 hover:bg-brand-50/50 rounded-2xl flex items-center gap-4 transition-all group shadow-sm"><Layout size={24} className="text-brand-600"/><span className="font-bold text-slate-900 text-sm">Gestão de Assembleia</span></button><button onClick={() => handleRepairSession('CONVENTION')} className="w-full p-4 bg-white border-2 border-slate-100 hover:border-purple-400 hover:bg-purple-50/50 rounded-2xl flex items-center gap-4 transition-all group shadow-sm"><Grid size={24} className="text-purple-600"/><span className="font-bold text-slate-900 text-sm">Gestão de Congresso</span></button><button onClick={handleLogout} className="w-full mt-4 py-3 text-slate-400 text-xs font-bold hover:text-slate-700">Cancelar e Sair</button></div></div> ); }
-  if (showTypeSelection) { return ( <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"><div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-4 animate-fade-in"><h2 className="text-center text-slate-800 font-extrabold mb-6 text-lg">Qual programa?</h2><button onClick={() => handleSelectEventType('BETHEL_REP')} className="w-full p-4 bg-white border-2 border-slate-100 hover:border-brand-400 hover:bg-brand-50/50 rounded-2xl flex items-center gap-4 transition-all group shadow-sm"><Smartphone size={24} className="text-brand-600"/><span className="font-bold text-slate-900 text-sm">Assembleia com Rep. de Betel</span></button><button onClick={() => handleSelectEventType('CIRCUIT_OVERSEER')} className="w-full p-4 bg-white border-2 border-slate-100 hover:border-blue-400 hover:bg-blue-50/50 rounded-2xl flex items-center gap-4 transition-all group shadow-sm"><Briefcase size={24} className="text-blue-600"/><span className="font-bold text-slate-900 text-sm">Assembleia com Sup. de Circuito</span></button><button onClick={handleLogout} className="w-full mt-4 py-3 text-slate-400 text-xs font-bold hover:text-slate-700">Cancelar e Sair</button></div></div> ); }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative overflow-hidden">
        <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0"><div className="absolute top-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-brand-100/30 rounded-full blur-[120px]"></div><div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-cyan-100/30 rounded-full blur-[120px]"></div></div>
        
-       <header className="fixed top-4 left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-white/50 rounded-2xl px-4 py-3 flex justify-between items-center shadow-lg">
-          <div className="flex items-center gap-3"><button onClick={() => setView('dashboard')} className="p-2.5 rounded-xl bg-slate-100/50 hover:bg-white text-slate-600 transition-all"><Home size={20} /></button><div className="flex flex-col ml-1 pl-3 h-9 justify-center border-l border-slate-200/50"><h1 className="font-bold text-slate-800 text-base md:text-lg leading-tight truncate max-w-[140px] md:max-w-[300px]">{!showPublicDashboard ? authSession.eventId : 'Programação / Anotações'}</h1><span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 leading-none flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></div>{authSession.userName}</span></div></div>
-          <div className="flex items-center gap-2">{authSession.isTemplate ? (<button onClick={handleReturnToProviderPanel} className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200 font-bold text-xs flex items-center gap-2"><ArrowLeft size={16} /> Voltar ao Painel</button>) : (<>{(isAdmin || isSuperAdmin || isMaster) && (<button onClick={isMaster || isSuperAdmin ? handleOpenCloudModal : () => handleSync('down')} disabled={!cloudUrl && !isMaster && !isSuperAdmin} className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${cloudUrl ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' : (isMaster || isSuperAdmin ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100 animate-pulse' : 'bg-transparent border-transparent opacity-0 pointer-events-none')}`} title={isMaster || isSuperAdmin ? (cloudUrl ? 'Configurar Nuvem (Master)' : 'Conectar Nuvem (Master)') : 'Sincronizado'}>{cloudUrl ? (<>{syncStatus === 'syncing' && <RefreshCw size={20} className="animate-spin text-amber-500" />}{syncStatus === 'success' && <Cloud size={20} className="text-emerald-500" />}{syncStatus === 'error' && <AlertTriangle size={20} className="text-red-500" />}{syncStatus === 'idle' && (isMaster || isSuperAdmin ? <Cloud size={20} className="text-slate-400" /> : <Wifi size={20} className="text-emerald-500" />)}<span className="text-[10px] font-bold uppercase hidden sm:inline w-20 text-center">{syncStatus === 'syncing' ? 'Salvando...' : syncStatus === 'success' ? 'Salvo' : syncStatus === 'error' ? 'Erro' : (isMaster || isSuperAdmin ? 'Nuvem' : 'Online')}</span></>) : ((isMaster || isSuperAdmin) && (<><CloudOff size={20} /><span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span></>))}{isMaster && (!cloudUrl || syncStatus === 'error') && (<span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" /></span>)}</button>)}{cloudUrl && (isAdmin || isSuperAdmin) && (<div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 ml-1 hidden md:flex"><button title="Baixar dados da Nuvem (Download)" onClick={() => handleSync('down')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-blue-600 shadow-sm hover:bg-blue-50 transition-colors border border-slate-100"><Download size={16}/></button></div>)}<button onClick={handleLogout} className="ml-1 p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100"><LogoutIcon size={18} /></button></>)}</div>
-       </header>
+       <Header 
+         authSession={authSession}
+         showPublicDashboard={showPublicDashboard || false}
+         onNavigateHome={() => setView('dashboard')}
+         onReturnToProvider={handleReturnToProviderPanel}
+         onOpenCloud={isMaster || isSuperAdmin ? handleOpenCloudModal : undefined}
+         onSync={() => handleSync('down')}
+         onLogout={handleLogout}
+         cloudUrl={cloudUrl}
+         syncStatus={syncStatus}
+         isAdmin={isAdmin || false}
+         isSuperAdmin={isSuperAdmin || false}
+         isMaster={isMaster || false}
+       />
        
        <main className="relative z-10 pt-24 pb-32 md:pb-8 animate-fade-in max-w-7xl mx-auto px-4">
           {view === 'dashboard' && (
@@ -872,10 +828,27 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
 
        {showOrganogramPinModal && (<div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center animate-fade-in relative overflow-hidden"><button onClick={() => { setShowOrganogramPinModal(false); setOrganogramPinError(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button><div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-500"><Lock size={32}/></div><h3 className="text-xl font-bold text-slate-800 mb-2">Acesso Restrito</h3><p className="text-sm text-slate-500 mb-6">Digite o PIN da equipe.</p><form onSubmit={handleOrganogramPinSubmit}><input type="password" inputMode="numeric" className="w-full text-center text-2xl font-bold tracking-widest py-3 border-b-2 border-slate-200 outline-none focus:border-brand-500 bg-transparent mb-4 text-slate-800" placeholder="••••" maxLength={10} value={organogramPinInput} onChange={(e) => { setOrganogramPinInput(e.target.value); setOrganogramPinError(''); }} autoFocus />{organogramPinError && <p className="text-xs font-bold text-red-500 mb-4 animate-pulse">{organogramPinError}</p>}<button type="submit" className="w-full py-3 bg-brand-600 text-white rounded-xl font-bold shadow-lg hover:bg-brand-700 transition-all">Acessar</button></form></div></div>)}
        {showReportModal && (<div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-fade-in"><h3 className="font-bold text-slate-800 text-lg mb-4 text-center flex items-center justify-center gap-2">{reportPeriod === 'morning' ? <Sun size={20} className="text-amber-500" /> : <Moon size={20} className="text-blue-500" />} Informar Assistência</h3><div className="mb-4 text-center"><span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${reportPeriod === 'morning' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{reportPeriod === 'morning' ? 'Turno da Manhã' : 'Turno da Tarde'}</span></div><input type="number" className="w-full text-center text-4xl font-bold text-slate-800 py-4 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-brand-500 outline-none mb-6" placeholder="0" autoFocus value={reportValue} onChange={(e) => setReportValue(e.target.value)} /><div className="flex gap-3"><button onClick={() => setShowReportModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancelar</button><button onClick={handleReportAttendance} disabled={!reportValue || reportSent} className="flex-1 py-3 bg-brand-600 text-white font-bold rounded-xl shadow-lg hover:bg-brand-700 transition-all flex items-center justify-center gap-2">{reportSent ? <Check size={20}/> : <Send size={18}/>}{reportSent ? 'Enviado!' : 'Enviar'}</button></div></div></div>)}
-       {/* MODAL DE NUVEM (AGORA ACESSÍVEL NA TELA LOGADA) */}
-       {showCloudModal && (<div className="fixed inset-0 bg-white/95 backdrop-blur-md z-[100] p-8 flex flex-col items-center justify-center animate-fade-in overflow-y-auto"><div className="w-full max-w-sm space-y-5"><div className="text-center"><div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border shadow-sm ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-brand-50 text-brand-600 border-brand-100'}`}><Cloud size={32}/></div><h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3><p className="text-xs text-slate-500 mt-1">Sincronize seus dados entre dispositivos.</p></div>{cloudUrl && (<div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle2 size={18} className="text-emerald-500"/><span className="text-xs font-bold text-emerald-800">Conectado</span></div><button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1 rounded border border-red-100 hover:bg-red-50 flex items-center gap-1"><Unplug size={10}/> Desconectar</button></div>)}<div className="space-y-3"><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Project URL</label><input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => setCloudUrl(e.target.value)} /></div><div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">API Key (anon public)</label><input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => setCloudKey(e.target.value)} /></div></div><div className="bg-amber-50 p-4 rounded-xl border border-amber-100 relative"><label className="block text-[10px] font-bold text-amber-700 uppercase mb-2 flex items-center gap-1"><Key size={12}/> Senha de Criptografia (Invente uma)</label><div className="relative"><input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 pr-10 text-sm font-mono outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" placeholder="Sua senha secreta..." value={cloudPass} onChange={e => setCloudPass(e.target.value)} /><button type="button" onClick={() => setShowCloudPass(!showCloudPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">{showCloudPass ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></div>
-    {showSqlHelp && (<div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative"><button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button><p className="text-slate-400 mb-2 border-b border-slate-700 pb-2">Copie e cole no SQL Editor do Supabase:</p><pre className="whitespace-pre-wrap select-all">{getSqlScript()}</pre></div>)}
-    <div className="space-y-2 pt-2"><button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">{isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : null}{isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}</button><div className="flex gap-2"><button onClick={() => setShowSqlHelp(!showSqlHelp)} className="flex-1 py-3 text-brand-600 bg-brand-50 border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-100 flex items-center justify-center gap-1"><Database size={14}/> Script SQL</button><button onClick={() => setShowCloudModal(false)} disabled={isTestingCloud} className="flex-1 py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">Cancelar</button></div></div></div></div>)}
+       
+       {/* RENDERIZAÇÃO DO TOAST (Mensagens de Sucesso/Erro) */}
+       {toastMessage && (
+          <div className={`fixed top-24 right-6 px-4 py-3 rounded-xl shadow-xl text-sm font-bold z-50 animate-bounce-in flex items-center gap-2 ${toastMessage.type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+            {toastMessage.type === 'error' ? <AlertTriangle size={18}/> : <Check size={18}/>}
+            {toastMessage.text}
+          </div>
+       )}
+
+       {showCloudModal && (
+        <CloudModal 
+            onClose={() => setShowCloudModal(false)}
+            onSuccess={handleCloudSuccess}
+            cloudUrl={cloudUrl}
+            setCloudUrl={setCloudUrl}
+            cloudKey={cloudKey}
+            setCloudKey={setCloudKey}
+            cloudPass={cloudPass}
+            setCloudPass={setCloudPass}
+        />
+       )}
     </div>
   );
 };

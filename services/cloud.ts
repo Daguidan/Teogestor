@@ -47,7 +47,7 @@ const cleanUrl = (url: string) => {
     return cleaned;
 };
 
-// Timeout promise wrapper
+// Timeout promise wrapper - AUMENTADO PARA 60s (Supabase Cold Start Garantido)
 const withTimeout = <T>(promise: PromiseLike<T>, ms: number, errorMessage: string): Promise<any> => {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(errorMessage)), ms);
@@ -121,41 +121,46 @@ export const CloudService = {
   },
 
   getConfig: (): CloudConfig | null => {
-    const url = SecureStorage.getItem(CLOUD_URL_KEY, '');
-    const key = SecureStorage.getItem(CLOUD_KEY_KEY, '');
-    const pass = SecureStorage.getItem(CLOUD_PASS_KEY, '');
-    return url && key ? { url, key, encryptionPass: pass } : null;
+    try {
+        const url = SecureStorage.getItem(CLOUD_URL_KEY, '');
+        const key = SecureStorage.getItem(CLOUD_KEY_KEY, '');
+        const pass = SecureStorage.getItem(CLOUD_PASS_KEY, '');
+        return url && key ? { url, key, encryptionPass: pass } : null;
+    } catch (e) {
+        console.error("Erro ao ler config", e);
+        return null;
+    }
   },
 
   // --- CRUD Operations ---
   
-  // Teste de conexão real com Timeout aumentado para 15s
+  // Teste de conexão real com Timeout aumentado para 60s
   testConnection: async () => {
     if (!supabase) return { success: false, error: 'Cliente não inicializado' };
     try {
         const { error } = await withTimeout(
             supabase.from(TABLE_NAME).select('id').limit(1),
-            15000, 
-            'Tempo limite excedido. O projeto Supabase pode estar PAUSADO.'
+            60000, 
+            'Tempo esgotado (60s). O banco de dados está acordando. Por favor, clique em "Reconectar" novamente em alguns segundos.'
         );
         
         if (error) {
             if (error.code === '42P01') { 
                 return { success: false, error: 'Tabela não encontrada. Crie a tabela "evento" usando o script SQL.' };
             }
-            if (error.code === 'PGRST301') {
-                return { success: false, error: 'Cliente Supabase não consegue conectar. Verifique se o projeto está ativo.' };
+            if (error.code === 'PGRST301' || error.message.includes('fetch')) {
+                return { success: false, error: 'Erro de rede. Verifique a URL do projeto Supabase.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
         return { success: true };
     } catch (e: any) {
         const msg = e.message || '';
-        if (msg.includes('Failed to fetch') || msg.includes('Load failed')) {
-             return { success: false, error: 'Falha de rede. Verifique a URL ou se o projeto Supabase foi pausado (Free Tier).' };
+        if (msg.includes('acordando')) {
+            return { success: false, error: msg };
         }
-        if (msg.includes('PAUSADO')) {
-            return { success: false, error: 'O projeto Supabase parece estar PAUSADO ou lento. Tente novamente.' };
+        if (msg.includes('Failed to fetch') || msg.includes('Load failed')) {
+             return { success: false, error: 'Falha de rede. URL incorreta ou projeto pausado.' };
         }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }
@@ -190,8 +195,8 @@ export const CloudService = {
               },
               { onConflict: 'id' }
             ),
-          15000,
-          'Tempo limite excedido no upload.'
+          60000,
+          'Tempo limite excedido no upload (60s).'
       );
       
       if (error) throw error;
@@ -216,7 +221,7 @@ export const CloudService = {
             .select('data, updated_at')
             .eq('id', eventId)
             .single(),
-          10000,
+          45000,
           'Tempo limite excedido no download.'
       );
 
@@ -266,7 +271,7 @@ export const CloudService = {
             .from(TABLE_NAME)
             .select('id, updated_at')
             .order('updated_at', { ascending: false }),
-          10000, 
+          60000, 
           'Timeout'
       );
 
@@ -275,7 +280,7 @@ export const CloudService = {
     } catch (e: any) {
       console.error("Erro ao listar eventos:", e);
       if (e.message && (e.message.includes('Failed to fetch') || e.message === 'Timeout')) {
-          return { error: 'Falha de conexão. Projeto Supabase pausado ou URL incorreta.' };
+          return { error: 'Falha de conexão. O banco de dados pode estar acordando. Tente novamente em 30s.' };
       }
       return { error: e.message || 'Erro de conexão' };
     }
