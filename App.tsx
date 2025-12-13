@@ -77,7 +77,8 @@ import {
   CloudOff,
   CopyPlus,
   Unplug,
-  Wifi
+  Wifi,
+  ArrowRight
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -169,11 +170,10 @@ export const App: React.FC = () => {
   const [providerNewEventId, setProviderNewEventId] = useState('');
   const [providerNewEventType, setProviderNewEventType] = useState<EventType>('BETHEL_REP');
   
-  // Clone States
-  const [cloneSourceId, setCloneSourceId] = useState('');
-  const [cloneTargetId, setCloneTargetId] = useState('');
-  const [cloneTargetType, setCloneTargetType] = useState<EventType>('CIRCUIT_OVERSEER');
-  const [isCloning, setIsCloning] = useState(false);
+  // Clone/Duplicate States
+  const [duplicateTargetId, setDuplicateTargetId] = useState('');
+  const [duplicateTargetType, setDuplicateTargetType] = useState<EventType>('CIRCUIT_OVERSEER');
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [copyFeedback, setCopyFeedback] = useState('');
@@ -208,22 +208,40 @@ export const App: React.FC = () => {
   const processCloudData = (eventId: string, cloudData: any) => {
       if (!cloudData) return;
 
-      if (cloudData.type) {
-          const type = cloudData.type as EventType;
-          setSelectedEventType(type);
-          SecureStorage.setItem(`${eventId}_last_event_type`, type);
+      // URL Type Override: If the URL has ?type=..., it takes precedence over saved data
+      const params = new URLSearchParams(window.location.search);
+      const urlType = params.get('type') as EventType | null;
+
+      if (urlType) {
+          setSelectedEventType(urlType);
+          SecureStorage.setItem(`${eventId}_last_event_type`, urlType);
+          
+          // Force load the correct program for the URL type
+          // If it's standard, we load from constants to ensure fresh structure, otherwise from storage/cloud
+          if (urlType === 'BETHEL_REP') setProgram(PROGRAM_BETHEL);
+          else if (urlType === 'CIRCUIT_OVERSEER') setProgram(PROGRAM_CO);
+          else if (urlType === 'REGIONAL_CONVENTION') setProgram(PROGRAM_CONVENTION);
+          
+          // If we had a specific saved program for this type, try to use it? 
+          // Usually better to stick to standard unless the user edited it.
+      } else {
+          if (cloudData.type) {
+              const type = cloudData.type as EventType;
+              setSelectedEventType(type);
+              SecureStorage.setItem(`${eventId}_last_event_type`, type);
+          }
+          
+          if (cloudData.program) {
+              setProgram(cloudData.program as AssemblyProgram);
+              SecureStorage.setItem(`${eventId}_program_${cloudData.program.type}`, cloudData.program);
+          }
       }
 
       if (cloudData.org) {
-          const isConvention = cloudData.type === 'REGIONAL_CONVENTION';
+          const isConvention = (urlType || cloudData.type) === 'REGIONAL_CONVENTION';
           const structKey = isConvention ? `${eventId}_CONVENTION_structure` : `${eventId}_structure`;
           SecureStorage.setItem(structKey, cloudData.org);
           setOrgData(cloudData.org);
-      }
-      
-      if (cloudData.program) {
-          setProgram(cloudData.program as AssemblyProgram);
-          SecureStorage.setItem(`${eventId}_program_${cloudData.program.type}`, cloudData.program);
       }
 
       if (cloudData.notes) {
@@ -260,6 +278,25 @@ export const App: React.FC = () => {
           setShowCloudModal(false);
           showToast('Nuvem desconectada.', 'success');
       }
+  };
+  
+  const handleQuickReconnect = async () => {
+      setEventsError('');
+      setIsLoadingEvents(true);
+      const config = CloudService.getConfig();
+      if (config) {
+          CloudService.configure(config.url, config.key, config.encryptionPass || '');
+          const res = await CloudService.testConnection();
+          if (res.success) {
+              showToast('Reconectado com sucesso!', 'success');
+              if (authSession?.isSuperAdmin) fetchProviderEvents();
+          } else {
+              setEventsError(res.error || 'Falha ao reconectar.');
+          }
+      } else {
+          setEventsError('Configurações perdidas. Reconfigure.');
+      }
+      setIsLoadingEvents(false);
   };
 
   // --- AUTO-SAVE EFFECT ---
@@ -343,7 +380,10 @@ export const App: React.FC = () => {
               setLoginEventId(eventId);
               setIsDirectLink(true);
 
+              const params = new URLSearchParams(window.location.search);
               let tokenParam = '';
+              const urlType = params.get('type') as EventType | null;
+
               if (window.location.hash && window.location.hash.includes('token=')) {
                  const hashStr = window.location.hash.substring(1); 
                  const hashParams = new URLSearchParams(hashStr);
@@ -354,8 +394,13 @@ export const App: React.FC = () => {
                  }
               }
               if (!tokenParam) {
-                 const params = new URLSearchParams(window.location.search);
                  tokenParam = params.get('token') || '';
+              }
+
+              // Handle "Link Type" logic here
+              if (urlType) {
+                  setSelectedEventType(urlType);
+                  SecureStorage.setItem(`${eventId}_last_event_type`, urlType);
               }
 
               let configConfigured = false;
@@ -1060,54 +1105,58 @@ export const App: React.FC = () => {
     }
   };
 
-  // --- CLONE/DUPLICATE EVENT FEATURE ---
-  const handleCloneEvent = async () => {
-      if (!cloneSourceId || !cloneTargetId) {
-          alert("Selecione a origem e defina o ID do novo evento.");
+  // --- CLONE/DUPLICATE EVENT FEATURE FOR LOCAL ADMINS ---
+  const handleDuplicateCurrentEvent = async () => {
+      if (!duplicateTargetId) {
+          alert("Por favor, insira o ID da próxima Assembleia.");
           return;
       }
       
-      if (cloneSourceId === cloneTargetId) {
-          alert("O ID de origem e destino não podem ser iguais.");
+      // Validação básica
+      if (duplicateTargetId === authSession?.eventId) {
+          alert("O novo ID deve ser diferente do atual.");
           return;
       }
 
-      setIsCloning(true);
-      setCopyFeedback("Clonando dados...");
+      setIsDuplicating(true);
+      setCopyFeedback("Preparando novo evento...");
 
       try {
-          // 1. Carregar dados da origem
-          const sourceRes = await CloudService.loadEvent(cloneSourceId);
-          if (!sourceRes.data) throw new Error("Evento de origem não encontrado ou vazio.");
-
-          // 2. Preparar novo programa com base no tipo selecionado
+          // 1. Carregar dados atuais da nuvem para garantir integridade
+          // Usamos o objeto local orgData que já está sincronizado/editado
+          
+          // 2. Preparar novo programa
           let newProgram = PROGRAM_BETHEL;
-          if (cloneTargetType === 'CIRCUIT_OVERSEER') newProgram = PROGRAM_CO;
-          if (cloneTargetType === 'REGIONAL_CONVENTION') newProgram = PROGRAM_CONVENTION;
+          if (duplicateTargetType === 'CIRCUIT_OVERSEER') newProgram = PROGRAM_CO;
+          if (duplicateTargetType === 'REGIONAL_CONVENTION') newProgram = PROGRAM_CONVENTION;
 
-          // 3. Montar payload do novo evento (Preserva Org, Reseta o resto)
+          // 3. Payload
           const newPayload = {
-              org: sourceRes.data.org, // Mantém a estrutura/equipe
-              program: newProgram,     // Novo programa zerado
-              notes: {},               // Limpa notas
-              attendance: {},          // Limpa assistência
-              type: cloneTargetType,   // Novo tipo
+              org: orgData, // CLONA A EQUIPE
+              program: newProgram,
+              notes: {},
+              attendance: {},
+              type: duplicateTargetType,
               version: APP_CONFIG.APP_VERSION
           };
 
           // 4. Salvar no novo ID
-          const saveRes = await CloudService.saveEvent(cloneTargetId.toUpperCase(), newPayload);
+          const saveRes = await CloudService.saveEvent(duplicateTargetId.toUpperCase(), newPayload);
           
           if (saveRes.error) throw new Error(saveRes.error);
 
-          alert(`Sucesso! O evento "${cloneTargetId}" foi criado copiando a equipe de "${cloneSourceId}".`);
-          setCloneTargetId('');
-          fetchProviderEvents(); // Atualiza a lista
+          if (confirm(`Sucesso! O evento "${duplicateTargetId}" foi criado com a mesma equipe. Deseja sair e acessar o novo evento agora?`)) {
+              handleLogout();
+              setLoginEventId(duplicateTargetId.toUpperCase());
+              // Em um cenário real, redirecionaríamos para o link admin
+          } else {
+              setDuplicateTargetId('');
+          }
 
       } catch (error) {
-          alert(`Erro ao clonar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          alert(`Erro ao criar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       } finally {
-          setIsCloning(false);
+          setIsDuplicating(false);
           setCopyFeedback("");
       }
   };
@@ -1832,44 +1881,6 @@ $$;`}
                       <p className="text-xs text-slate-400 mt-3">{copyFeedback || 'Cria um novo evento na nuvem a partir do modelo base e gera o link de convite.'}</p>
                     </div>
 
-                    {/* --- DUPLICATE EVENT (CLONE) FEATURE --- */}
-                    <div className="bg-indigo-50 p-6 rounded-2xl shadow-sm border border-indigo-100">
-                        <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2 mb-4"><CopyPlus size={18} /> Clonar Estrutura (Novo Evento)</h3>
-                        <p className="text-xs text-indigo-700 mb-4">Use isso para a próxima Assembleia. Copia toda a equipe, voluntários e congregações de um evento anterior, mas zera o programa para o novo tipo.</p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                            {/* 1. Source */}
-                            <div>
-                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Copiar de:</label>
-                                <select className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-bold text-indigo-900" value={cloneSourceId} onChange={e => setCloneSourceId(e.target.value)}>
-                                    <option value="">-- Selecione Origem --</option>
-                                    {providerEventList.map(ev => <option key={ev.id} value={ev.id}>{ev.id}</option>)}
-                                </select>
-                            </div>
-                            
-                            {/* 2. Target */}
-                            <div>
-                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo ID (ex: SP-01 SET):</label>
-                                <input className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-mono uppercase text-indigo-900 placeholder-indigo-300" placeholder="NOVO ID" value={cloneTargetId} onChange={e => setCloneTargetId(e.target.value)} />
-                            </div>
-
-                            {/* 3. New Type */}
-                            <div>
-                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo Programa:</label>
-                                <select className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-bold text-indigo-900" value={cloneTargetType} onChange={e => setCloneTargetType(e.target.value as EventType)}>
-                                    <option value="CIRCUIT_OVERSEER">Assembleia (Sup. Circuito)</option>
-                                    <option value="BETHEL_REP">Assembleia (Rep. Betel)</option>
-                                    <option value="REGIONAL_CONVENTION">Congresso</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <button onClick={handleCloneEvent} disabled={isCloning || !cloneSourceId || !cloneTargetId} className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
-                            {isCloning ? <Loader2 size={16} className="animate-spin"/> : <CopyPlus size={16}/>} 
-                            {isCloning ? 'Clonando...' : 'Criar Novo Evento com Mesma Equipe'}
-                        </button>
-                    </div>
-
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><PenTool size={18} /> Gerenciar Modelos Base</h3>
                         <p className="text-xs text-slate-500 mb-4">Edite os programas e estruturas padrão que serão usados ao criar novos eventos.</p>
@@ -1893,9 +1904,14 @@ $$;`}
                                 <AlertTriangle size={18} className="shrink-0"/> 
                                 <span>{eventsError}</span>
                               </div>
-                              <button onClick={handleOpenCloudModal} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs flex items-center gap-2 font-extrabold uppercase tracking-wide">
-                                <Settings size={14}/> Configurar Conexão
-                              </button>
+                              <div className="flex gap-2">
+                                <button onClick={handleQuickReconnect} className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors flex items-center gap-2 whitespace-nowrap">
+                                    <RefreshCw size={14}/> Reconectar
+                                </button>
+                                <button onClick={handleOpenCloudModal} className="px-4 py-2 bg-white border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors shadow-sm whitespace-nowrap text-xs flex items-center gap-2 font-extrabold uppercase tracking-wide">
+                                    <Settings size={14}/> Configurar
+                                </button>
+                              </div>
                           </div>
                       ) : null}
                       {isLoadingEvents ? <p className="text-center text-slate-400 py-8">Carregando...</p> : (
@@ -2068,6 +2084,49 @@ $$;`}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                     {/* --- CLONE EVENT CARD FOR LOCAL ADMINS --- */}
+                     {isAdmin && !isSuperAdmin && (
+                         <div className="col-span-full bg-indigo-50 rounded-3xl shadow-sm border border-indigo-100 p-6 flex flex-col md:flex-row items-center justify-between gap-6 mb-2">
+                             <div className="flex-1">
+                                 <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2"><CopyPlus size={20}/> Preparar Próxima Assembleia</h3>
+                                 <p className="text-xs text-indigo-700 mt-1 max-w-lg">
+                                     Terminou o evento atual? Clone toda a estrutura (equipe e congregações) para um novo ID e comece a próxima organização sem perder tempo.
+                                 </p>
+                             </div>
+                             <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto items-end">
+                                 <div className="w-full md:w-40">
+                                     <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo ID (Ex: GO-003-B)</label>
+                                     <input 
+                                         className="w-full p-3 rounded-xl border border-indigo-200 text-sm font-bold uppercase text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-300"
+                                         placeholder="NOVO ID"
+                                         value={duplicateTargetId}
+                                         onChange={(e) => setDuplicateTargetId(e.target.value)}
+                                     />
+                                 </div>
+                                 <div className="w-full md:w-48">
+                                     <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo Programa</label>
+                                     <select 
+                                         className="w-full p-3 rounded-xl border border-indigo-200 text-sm font-bold text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-300"
+                                         value={duplicateTargetType}
+                                         onChange={(e) => setDuplicateTargetType(e.target.value as EventType)}
+                                     >
+                                         <option value="CIRCUIT_OVERSEER">Assembleia (Sup. Circuito)</option>
+                                         <option value="BETHEL_REP">Assembleia (Rep. Betel)</option>
+                                         <option value="REGIONAL_CONVENTION">Congresso</option>
+                                     </select>
+                                 </div>
+                                 <button 
+                                     onClick={handleDuplicateCurrentEvent} 
+                                     disabled={isDuplicating || !duplicateTargetId}
+                                     className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50"
+                                 >
+                                     {isDuplicating ? <Loader2 size={18} className="animate-spin"/> : <ArrowRight size={18}/>}
+                                     {isDuplicating ? 'Criando...' : 'Criar'}
+                                 </button>
+                             </div>
+                         </div>
+                     )}
+
                      <button onClick={() => setView('cover')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform"><Layout size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Capa do Evento</h3></button>
                      <button onClick={() => setView('program')} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><BookOpen size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Programa</h3></button>
                      <button onClick={() => { if(isAdmin || hasOverseerPrivileges) { setView('organogram'); } else { setOrganogramPinInput(''); setShowOrganogramPinModal(true); } }} className="p-6 bg-white rounded-3xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col items-center gap-3 text-center group"><div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><Users size={28}/></div><h3 className="font-bold text-slate-800 text-sm">Organograma</h3></button>
