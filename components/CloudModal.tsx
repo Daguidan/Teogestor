@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy } from 'lucide-react';
+import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy, WifiOff } from 'lucide-react';
 import { CloudService } from '../services/cloud';
 
 interface CloudModalProps {
@@ -30,13 +30,12 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   const [copyFeedback, setCopyFeedback] = useState('');
 
   const handleDisconnectCloud = () => {
-    if(confirm('Tem certeza que deseja desconectar?')) {
+    if(confirm('Tem certeza que deseja desconectar e remover as credenciais deste dispositivo?')) {
         CloudService.disconnect();
         setCloudUrl('');
         setCloudKey('');
         setCloudPass('');
         onClose();
-        // alert('Nuvem desconectada.'); // Removido alert intrusivo
     }
   };
 
@@ -73,23 +72,21 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   };
 
   const getSqlScript = () => {
-    return `-- SCRIPT DE CORREÇÃO DEFINITIVA (Rode no "SQL Editor" do Supabase)
+    return `-- SCRIPT INTELIGENTE (Não apaga dados antigos)
 
--- 1. Remove qualquer tabela antiga ou incorreta (Limpeza Total)
-DROP TABLE IF EXISTS evento;
-
--- 2. Cria a tabela 'evento' com a estrutura correta
-CREATE TABLE public.evento (
+-- 1. Cria a tabela 'evento' APENAS se ela ainda não existir
+CREATE TABLE IF NOT EXISTS public.evento (
     id text PRIMARY KEY,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     data jsonb
 );
 
--- 3. Habilita Segurança (RLS)
+-- 2. Habilita o sistema de segurança (RLS)
 ALTER TABLE public.evento ENABLE ROW LEVEL SECURITY;
 
--- 4. Cria Permissão TOTAL (Leitura e Escrita) para o App funcionar
+-- 3. Atualiza as permissões de acesso do aplicativo (Remove antigas para evitar duplicidade)
 DROP POLICY IF EXISTS "Acesso Total App" ON public.evento;
+
 CREATE POLICY "Acesso Total App" ON public.evento
 FOR ALL
 USING (true)
@@ -102,15 +99,24 @@ WITH CHECK (true);`;
     setTimeout(() => setCopyFeedback(''), 2000);
   };
 
+  // Define a cor e ícone do topo baseado no estado
+  const getHeaderState = () => {
+    if (errorMsg) return { color: 'bg-red-500', icon: <WifiOff size={32}/>, text: 'Falha na Conexão' };
+    if (cloudUrl) return { color: 'bg-brand-500', icon: <Cloud size={32}/>, text: 'Configurar Nuvem' };
+    return { color: 'bg-slate-400', icon: <Cloud size={32}/>, text: 'Conectar Supabase' };
+  };
+  
+  const header = getHeaderState();
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-white/20 flex flex-col max-h-[90vh]">
-        <div className="bg-brand-50 p-6 text-center border-b border-brand-100 relative">
-            <button onClick={onClose} className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 transition-colors bg-white/50 p-1.5 rounded-full"><X size={18}/></button>
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg ${cloudUrl ? 'bg-emerald-500 text-white' : 'bg-brand-500 text-white'}`}>
-                <Cloud size={32}/>
+        <div className="bg-slate-50 p-6 text-center border-b border-slate-100 relative">
+            <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors bg-white p-1.5 rounded-full shadow-sm"><X size={18}/></button>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg text-white transition-colors duration-300 ${header.color}`}>
+                {header.icon}
             </div>
-            <h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3>
+            <h3 className="font-bold text-slate-800 text-xl">{header.text}</h3>
             <p className="text-xs text-slate-500 mt-1 font-medium">Sincronização & Backup Seguro</p>
         </div>
 
@@ -128,11 +134,11 @@ WITH CHECK (true);`;
             <div className="space-y-3">
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Server size={10}/> Project URL</label>
-                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => setCloudUrl(e.target.value)} />
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => { setCloudUrl(e.target.value); setErrorMsg(''); }} />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Key size={10}/> API Key (anon public)</label>
-                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => setCloudKey(e.target.value)} />
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => { setCloudKey(e.target.value); setErrorMsg(''); }} />
                 </div>
             </div>
 
@@ -141,7 +147,7 @@ WITH CHECK (true);`;
                     <Key size={12}/> Senha de Criptografia (Local)
                 </label>
                 <div className="relative">
-                    <input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2.5 pr-10 text-xs font-bold text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" placeholder="Crie uma senha para proteger seus dados..." value={cloudPass} onChange={e => setCloudPass(e.target.value)} />
+                    <input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2.5 pr-10 text-xs font-bold text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" placeholder="Crie uma senha para proteger seus dados..." value={cloudPass} onChange={e => { setCloudPass(e.target.value); setErrorMsg(''); }} />
                     <button type="button" onClick={() => setShowCloudPass(!showCloudPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1">
                     {showCloudPass ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
@@ -169,11 +175,8 @@ WITH CHECK (true);`;
                     </div>
                     <pre className="whitespace-pre-wrap select-all text-emerald-300 font-bold bg-slate-900/50 p-2 rounded border border-slate-700/50">{getSqlScript()}</pre>
                     <div className="mt-3 text-[9px] text-white bg-blue-600/20 p-2.5 rounded border border-blue-500/30">
-                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide">Passo a Passo Definitivo:</strong>
-                        1. Copie o código acima.<br/>
-                        2. No site do Supabase, vá em <strong>SQL Editor</strong>.<br/>
-                        3. Cole o código e clique em <strong>RUN</strong>.<br/>
-                        4. Volte aqui e clique em "Salvar e Conectar".
+                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide">Solução do Erro 42P07:</strong>
+                        Este script é seguro. Ele só cria a tabela se ela não existir e apenas atualiza as permissões, mantendo seus dados salvos intactos.
                     </div>
                 </div>
             )}
@@ -181,7 +184,7 @@ WITH CHECK (true);`;
             <div className="pt-2 flex flex-col gap-2">
                 <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-4 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
                     {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : <CheckCircle2 size={18}/>}
-                    {isTestingCloud ? 'Testando e Salvando...' : 'Salvar e Conectar'}
+                    {isTestingCloud ? 'Testando...' : 'Salvar e Conectar'}
                 </button>
                 
                 {cloudUrl && !errorMsg && (
