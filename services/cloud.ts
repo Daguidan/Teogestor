@@ -48,7 +48,6 @@ const cleanUrl = (url: string) => {
 };
 
 // Timeout promise wrapper
-// FIX: Alterado para usar .then(resolve, reject) que é compatível com PromiseLike (Supabase Builder)
 const withTimeout = <T>(promise: PromiseLike<T>, ms: number, errorMessage: string): Promise<any> => {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(errorMessage)), ms);
@@ -74,7 +73,7 @@ export const CloudService = {
 
     // Limpeza de segurança
     url = cleanUrl(url);
-    key = key.trim();
+    key = key.trim().replace(/\s+/g, ''); // Remove espaços da chave também
 
     if (url && key) {
       try {
@@ -102,7 +101,7 @@ export const CloudService = {
     if (!url || !key) return false;
     
     const cleanUrlStr = cleanUrl(url);
-    const cleanKeyStr = key.trim();
+    const cleanKeyStr = key.trim().replace(/\s+/g, '');
     const cleanPassStr = pass.trim();
 
     SecureStorage.setItem(CLOUD_URL_KEY, cleanUrlStr);
@@ -130,20 +129,22 @@ export const CloudService = {
 
   // --- CRUD Operations ---
   
-  // Teste de conexão real com Timeout
+  // Teste de conexão real com Timeout aumentado para 15s
   testConnection: async () => {
     if (!supabase) return { success: false, error: 'Cliente não inicializado' };
     try {
-        // Timeout de 10s para não travar a interface se o projeto estiver pausado/offline
         const { error } = await withTimeout(
             supabase.from(TABLE_NAME).select('id').limit(1),
-            10000,
+            15000, 
             'Tempo limite excedido. O projeto Supabase pode estar PAUSADO.'
         );
         
         if (error) {
             if (error.code === '42P01') { 
-                return { success: false, error: 'A tabela "evento" não existe. Use o botão "Script SQL" na configuração.' };
+                return { success: false, error: 'Tabela não encontrada. Crie a tabela "evento" usando o script SQL.' };
+            }
+            if (error.code === 'PGRST301') {
+                return { success: false, error: 'Cliente Supabase não consegue conectar. Verifique se o projeto está ativo.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
@@ -154,7 +155,7 @@ export const CloudService = {
              return { success: false, error: 'Falha de rede. Verifique a URL ou se o projeto Supabase foi pausado (Free Tier).' };
         }
         if (msg.includes('PAUSADO')) {
-            return { success: false, error: 'O projeto Supabase parece estar PAUSADO. Acesse supabase.com para reativá-lo.' };
+            return { success: false, error: 'O projeto Supabase parece estar PAUSADO ou lento. Tente novamente.' };
         }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }
@@ -265,7 +266,7 @@ export const CloudService = {
             .from(TABLE_NAME)
             .select('id, updated_at')
             .order('updated_at', { ascending: false }),
-          8000, // 8s timeout para listagem
+          10000, 
           'Timeout'
       );
 
