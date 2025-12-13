@@ -76,7 +76,8 @@ import {
   Building2,
   CloudOff,
   CopyPlus,
-  Unplug
+  Unplug,
+  Wifi
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -368,6 +369,9 @@ export const App: React.FC = () => {
                     
                     if (config.cId && config.cKey) {
                        const finalUrl = config.cId.includes('http') ? config.cId : `https://${config.cId}.supabase.co`;
+                       
+                       // *** VITAL FIX: Salva as credenciais recebidas via link imediatamente ***
+                       // Isso garante que o admin local não precise "conectar" manualmente.
                        setCloudUrl(finalUrl);
                        setCloudKey(config.cKey);
                        setCloudPass(config.cPass || '');
@@ -1685,16 +1689,21 @@ $$;`}
       </button>
     ) : (
       <>
-        {/* BOTÃO DE CONFIGURAÇÃO DA NUVEM - SEMPRE VISÍVEL PARA ADMIN E MASTER */}
+        {/* BOTÃO DE CONFIGURAÇÃO DA NUVEM / STATUS */}
         {(isAdmin || isSuperAdmin || isMaster) && (
           <button
-            onClick={handleOpenCloudModal}
+            onClick={isMaster || isSuperAdmin ? handleOpenCloudModal : () => handleSync('down')}
+            disabled={!cloudUrl && !isMaster && !isSuperAdmin}
             className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${
               cloudUrl
                 ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100 animate-pulse'
+                : (isMaster || isSuperAdmin ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100 animate-pulse' : 'bg-transparent border-transparent opacity-0 pointer-events-none')
             }`}
-            title={cloudUrl ? '✅ Nuvem Conectada (Clique para configurar)' : '☁️ Nuvem Desconectada (Clique para conectar)'}
+            title={
+                isMaster || isSuperAdmin 
+                ? (cloudUrl ? 'Configurar Nuvem (Master)' : 'Conectar Nuvem (Master)') 
+                : 'Sincronizado com o Provedor (Clique para Atualizar)'
+            }
           >
             {/* INDICADOR DE STATUS DA NUVEM (AUTO-SAVE) */}
             {cloudUrl ? (
@@ -1702,19 +1711,23 @@ $$;`}
                     {syncStatus === 'syncing' && <RefreshCw size={20} className="animate-spin text-amber-500" />}
                     {syncStatus === 'success' && <Cloud size={20} className="text-emerald-500" />}
                     {syncStatus === 'error' && <AlertTriangle size={20} className="text-red-500" />}
-                    {syncStatus === 'idle' && <Cloud size={20} className="text-slate-400" />}
+                    {syncStatus === 'idle' && (
+                        isMaster || isSuperAdmin ? <Cloud size={20} className="text-slate-400" /> : <Wifi size={20} className="text-emerald-500" />
+                    )}
                     
                     <span className="text-[10px] font-bold uppercase hidden sm:inline w-20 text-center">
                         {syncStatus === 'syncing' ? 'Salvando...' : 
                          syncStatus === 'success' ? 'Salvo' :
-                         syncStatus === 'error' ? 'Erro' : 'Nuvem'}
+                         syncStatus === 'error' ? 'Erro' : (isMaster || isSuperAdmin ? 'Nuvem' : 'Online')}
                     </span>
                 </>
             ) : (
-                <>
-                    <CloudOff size={20} />
-                    <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>
-                </>
+                (isMaster || isSuperAdmin) && (
+                    <>
+                        <CloudOff size={20} />
+                        <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>
+                    </>
+                )
             )}
 
             {/* PONTO VERMELHO APENAS PARA MASTER QUANDO HÁ PROBLEMA / FALTA CONFIGURAÇÃO */}
