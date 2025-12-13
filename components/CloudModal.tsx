@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X } from 'lucide-react';
+import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle } from 'lucide-react';
 import { CloudService } from '../services/cloud';
 
 interface CloudModalProps {
@@ -85,78 +85,76 @@ create policy "Acesso Publico" on evento for all using (true) with check (true);
   };
 
   return (
-    <div className="fixed inset-0 bg-white/95 backdrop-blur-md z-[200] p-8 flex flex-col items-center justify-center animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-sm space-y-5">
-        <div className="text-center">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border shadow-sm ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-brand-50 text-brand-600 border-brand-100'}`}>
-            <Cloud size={32}/>
-          </div>
-          <h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3>
-          <p className="text-xs text-slate-500 mt-1">Sincronize seus dados entre dispositivos.</p>
-        </div>
-
-        {errorMsg && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold border border-red-100">
-                {errorMsg}
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up border border-white/20 flex flex-col max-h-[90vh]">
+        <div className="bg-brand-50 p-6 text-center border-b border-brand-100 relative">
+            <button onClick={onClose} className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 transition-colors bg-white/50 p-1.5 rounded-full"><X size={18}/></button>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg ${cloudUrl ? 'bg-emerald-500 text-white' : 'bg-brand-500 text-white'}`}>
+                <Cloud size={32}/>
             </div>
-        )}
+            <h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3>
+            <p className="text-xs text-slate-500 mt-1 font-medium">Sincronização & Backup Seguro</p>
+        </div>
 
-        {cloudUrl && !errorMsg && (
-          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={18} className="text-emerald-500"/>
-              <span className="text-xs font-bold text-emerald-800">Conectado</span>
+        <div className="p-6 space-y-4 overflow-y-auto">
+            {errorMsg && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold border border-red-100 flex items-start gap-2">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5"/> <span>{errorMsg}</span>
+                </div>
+            )}
+
+            {cloudUrl && !errorMsg && (
+            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                <CheckCircle2 size={18} className="text-emerald-500"/>
+                <span className="text-xs font-bold text-emerald-800">Conectado</span>
+                </div>
+                <button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 flex items-center gap-1 shadow-sm transition-all">
+                <Unplug size={12}/> Desconectar
+                </button>
             </div>
-            <button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1 rounded border border-red-100 hover:bg-red-50 flex items-center gap-1">
-              <Unplug size={10}/> Desconectar
-            </button>
-          </div>
-        )}
+            )}
 
-        <div className="space-y-3">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Project URL</label>
-            <input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => setCloudUrl(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">API Key (anon public)</label>
-            <input type="text" className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-xs outline-none focus:border-brand-500 focus:bg-white transition-all" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => setCloudKey(e.target.value)} />
-          </div>
-        </div>
+            <div className="space-y-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Server size={10}/> Project URL</label>
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => setCloudUrl(e.target.value)} />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Key size={10}/> API Key (anon public)</label>
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => setCloudKey(e.target.value)} />
+                </div>
+            </div>
 
-        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 relative">
-          <label className="block text-[10px] font-bold text-amber-700 uppercase mb-2 flex items-center gap-1">
-            <Key size={12}/> Senha de Criptografia (Invente uma)
-          </label>
-          <div className="relative">
-            <input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-xl px-4 py-3 pr-10 text-sm font-mono outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100" placeholder="Sua senha secreta..." value={cloudPass} onChange={e => setCloudPass(e.target.value)} />
-            <button type="button" onClick={() => setShowCloudPass(!showCloudPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-              {showCloudPass ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 relative">
+                <label className="block text-[10px] font-bold text-amber-700 uppercase mb-2 flex items-center gap-1">
+                    <Key size={12}/> Senha de Criptografia (Local)
+                </label>
+                <div className="relative">
+                    <input type={showCloudPass ? "text" : "password"} className="w-full border border-amber-200 bg-white rounded-lg px-3 py-2.5 pr-10 text-xs font-bold text-slate-700 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" placeholder="Crie uma senha para proteger seus dados..." value={cloudPass} onChange={e => setCloudPass(e.target.value)} />
+                    <button type="button" onClick={() => setShowCloudPass(!showCloudPass)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1">
+                    {showCloudPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                </div>
+            </div>
 
-        {showSqlHelp && (
-          <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative">
-            <button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button>
-            <p className="text-slate-400 mb-2 border-b border-slate-700 pb-2">Copie e cole no SQL Editor do Supabase:</p>
-            <pre className="whitespace-pre-wrap select-all">{getSqlScript()}</pre>
-          </div>
-        )}
+            {showSqlHelp && (
+            <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative mt-2">
+                <button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button>
+                <p className="text-slate-400 mb-2 border-b border-slate-700 pb-2 font-bold">SQL Setup (Copie e rode no Supabase):</p>
+                <pre className="whitespace-pre-wrap select-all text-emerald-400">{getSqlScript()}</pre>
+            </div>
+            )}
 
-        <div className="space-y-2 pt-2">
-          <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
-            {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : null}
-            {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
-          </button>
-          <div className="flex gap-2">
-            <button onClick={() => setShowSqlHelp(!showSqlHelp)} className="flex-1 py-3 text-brand-600 bg-brand-50 border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-100 flex items-center justify-center gap-1">
-              <Database size={14}/> Script SQL
-            </button>
-            <button onClick={onClose} disabled={isTestingCloud} className="flex-1 py-3 text-slate-400 hover:text-slate-600 text-xs font-bold disabled:opacity-50">
-              Cancelar
-            </button>
-          </div>
+            <div className="pt-2 flex flex-col gap-2">
+                <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                    {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : <CheckCircle2 size={18}/>}
+                    {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
+                </button>
+                <button onClick={() => setShowSqlHelp(!showSqlHelp)} className="w-full py-3 text-brand-600 bg-white border border-brand-100 rounded-xl text-xs font-bold hover:bg-brand-50 flex items-center justify-center gap-1 transition-colors">
+                    <Database size={14}/> {showSqlHelp ? 'Ocultar Script SQL' : 'Ver Script SQL (Configuração Inicial)'}
+                </button>
+            </div>
         </div>
       </div>
     </div>
