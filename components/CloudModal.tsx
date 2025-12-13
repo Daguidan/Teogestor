@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy, WifiOff, HelpCircle } from 'lucide-react';
+import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy, WifiOff, HelpCircle, ShieldAlert } from 'lucide-react';
 import { CloudService } from '../services/cloud';
 
 interface CloudModalProps {
@@ -61,7 +61,6 @@ export const CloudModal: React.FC<CloudModalProps> = ({
             setErrorMsg(msg);
             
             // Se o erro for de tabela não encontrada ou permissão, sugere o script
-            // Inclui erro de rede pois muitas vezes é configuração errada que o script não resolve, mas o usuário precisa verificar
             if (msg.includes('tabela') || msg.includes('42P01') || msg.includes('Permissão') || msg.includes('401') || msg.includes('42501')) {
                setShowSqlHelp(true);
             }
@@ -110,6 +109,8 @@ WITH CHECK (true);`;
   
   const header = getHeaderState();
 
+  const isNetworkError = errorMsg.includes('rede') || errorMsg.includes('fetch') || errorMsg.includes('Load failed');
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-white/20 flex flex-col max-h-[90vh]">
@@ -130,9 +131,14 @@ WITH CHECK (true);`;
                         <AlertTriangle size={18} className="shrink-0 mt-0.5 text-red-600"/> 
                         <span>{errorMsg}</span>
                     </div>
-                    {errorMsg.includes('rede') && (
-                        <div className="mt-1 pl-6 text-[10px] opacity-80">
-                            Dica: Verifique se a URL não tem espaços extras ou se o projeto no Supabase não está "Pausado".
+                    {isNetworkError && (
+                        <div className="mt-3 pl-2 border-l-2 border-red-200">
+                            <p className="mb-1 text-[10px] uppercase tracking-wide opacity-70">Verifique:</p>
+                            <ul className="list-disc pl-4 space-y-1 text-[11px] leading-tight">
+                                <li>O projeto no Supabase está <strong>PAUSADO</strong>? (Acesse o painel deles para reativar).</li>
+                                <li>Você usa <strong>AdBlock</strong> ou VPN? (Desative para este site).</li>
+                                <li>A URL está correta (sem espaços no final)?</li>
+                            </ul>
                         </div>
                     )}
                 </div>
@@ -141,11 +147,11 @@ WITH CHECK (true);`;
             <div className="space-y-3">
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Server size={10}/> Project URL</label>
-                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => { setCloudUrl(e.target.value); setErrorMsg(''); }} />
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="https://xyz...supabase.co" value={cloudUrl} onChange={e => { setCloudUrl(e.target.value.trim()); setErrorMsg(''); }} />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 focus-within:border-brand-400 transition-colors">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Key size={10}/> API Key (anon public)</label>
-                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => { setCloudKey(e.target.value); setErrorMsg(''); }} />
+                    <input type="text" className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." value={cloudKey} onChange={e => { setCloudKey(e.target.value.trim()); setErrorMsg(''); }} />
                 </div>
             </div>
 
@@ -167,7 +173,7 @@ WITH CHECK (true);`;
                   onClick={() => setShowSqlHelp(true)} 
                   className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
                 >
-                  <Database size={14}/> Ajuda com Erros de Conexão (SQL)
+                  <Database size={14}/> Ajuda com Erros de Banco (SQL)
                 </button>
             ) : (
                 <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] border border-slate-700 relative mt-2 animate-fade-in shadow-xl">
@@ -182,9 +188,9 @@ WITH CHECK (true);`;
                     </div>
                     <pre className="whitespace-pre-wrap select-all text-emerald-300 font-bold bg-slate-900/50 p-2 rounded border border-slate-700/50">{getSqlScript()}</pre>
                     <div className="mt-3 text-[9px] text-white bg-blue-600/20 p-2.5 rounded border border-blue-500/30">
-                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide flex items-center gap-1"><HelpCircle size={10}/> Como resolver o erro "already exists":</strong>
+                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide flex items-center gap-1"><HelpCircle size={10}/> Como resolver erros de Tabela/Permissão:</strong>
                         1. Apague TODO o código que está no editor do Supabase.<br/>
-                        2. Cole este novo código (que usa 'IF NOT EXISTS').<br/>
+                        2. Cole este novo código.<br/>
                         3. Clique em RUN.<br/>
                         4. Volte aqui e clique em "Salvar e Conectar".
                     </div>
