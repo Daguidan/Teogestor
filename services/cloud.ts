@@ -15,8 +15,8 @@ let encryptionPassword = '';
 // Helper para limpar e corrigir URL de forma agressiva
 const cleanUrl = (url: string) => {
     if (!url) return '';
-    // 1. Remove espaços e caracteres invisíveis
-    let cleaned = url.replace(/\s+/g, '').replace(/[\u200B-\u200D\uFEFF]/g, '');
+    // 1. Remove espaços e caracteres invisíveis e caracteres não-ASCII
+    let cleaned = url.replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
     
     // 2. Remove duplicidade de protocolo (ex: https://https://...)
     if (cleaned.match(/^https?:\/\/https?:\/\//)) {
@@ -73,7 +73,7 @@ export const CloudService = {
 
     // Limpeza de segurança
     url = cleanUrl(url);
-    key = key.trim().replace(/\s+/g, ''); // Remove espaços da chave também
+    key = key.trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, ''); // Remove espaços da chave também
 
     if (url && key) {
       try {
@@ -101,7 +101,7 @@ export const CloudService = {
     if (!url || !key) return false;
     
     const cleanUrlStr = cleanUrl(url);
-    const cleanKeyStr = key.trim().replace(/\s+/g, '');
+    const cleanKeyStr = key.trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
     const cleanPassStr = pass.trim();
 
     SecureStorage.setItem(CLOUD_URL_KEY, cleanUrlStr);
@@ -155,7 +155,7 @@ export const CloudService = {
                  return { success: false, error: 'Erro de Permissão. Use o Script SQL para corrigir as políticas.' };
             }
             if (error.code === 'PGRST301' || error.message.includes('fetch')) {
-                return { success: false, error: 'Erro de rede. Verifique a URL do projeto Supabase.' };
+                return { success: false, error: 'Erro de rede. Verifique a URL ou desative o AdBlock.' };
             }
             return { success: false, error: `Erro Supabase: ${error.message} (${error.code})` };
         }
@@ -166,7 +166,7 @@ export const CloudService = {
             return { success: false, error: msg };
         }
         if (msg.includes('Failed to fetch') || msg.includes('Load failed')) {
-             return { success: false, error: 'Falha de rede. URL incorreta ou projeto pausado.' };
+             return { success: false, error: 'Falha de rede. Bloqueador de Anúncios ativo ou Projeto Pausado.' };
         }
         return { success: false, error: e.message || 'Erro desconhecido ao testar conexão' };
     }
@@ -213,7 +213,7 @@ export const CloudService = {
     } catch (e: any) {
       console.error("Erro no upload Cloud:", e);
       if (e.message && e.message.includes('Failed to fetch')) {
-          return { error: 'Erro de conexão (URL inválida ou projeto pausado).' };
+          return { error: 'Erro de conexão (AdBlock ou projeto pausado).' };
       }
       return { error: e.message || 'Erro de conexão' };
     }
@@ -265,7 +265,7 @@ export const CloudService = {
     } catch (e: any) {
       console.error("Erro no download Cloud:", e);
       if (e.message && e.message.includes('Failed to fetch')) {
-          return { error: 'Erro de conexão (URL inválida ou projeto pausado).' };
+          return { error: 'Erro de conexão (AdBlock ou projeto pausado).' };
       }
       return { error: e.message || 'Erro de conexão' };
     }
@@ -290,7 +290,7 @@ export const CloudService = {
     } catch (e: any) {
       console.error("Erro ao listar eventos:", e);
       if (e.message && (e.message.includes('Failed to fetch') || e.message === 'Timeout')) {
-          return { error: 'Falha de conexão. O banco de dados pode estar acordando. Tente novamente em 30s.' };
+          return { error: 'Falha de conexão. O banco de dados pode estar acordando ou AdBlock está ativo.' };
       }
       if (e.code === '42P01') {
           return { error: 'A tabela "evento" não existe no Supabase. Configure-a no modal de Nuvem.' };

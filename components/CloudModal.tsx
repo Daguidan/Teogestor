@@ -132,12 +132,17 @@ WITH CHECK (true);`;
                         <span>{errorMsg}</span>
                     </div>
                     {isNetworkError && (
-                        <div className="mt-3 pl-2 border-l-2 border-red-200">
-                            <p className="mb-1 text-[10px] uppercase tracking-wide opacity-70">Verifique:</p>
-                            <ul className="list-disc pl-4 space-y-1 text-[11px] leading-tight">
-                                <li>O projeto no Supabase está <strong>PAUSADO</strong>? (Acesse o painel deles para reativar).</li>
-                                <li>Você usa <strong>AdBlock</strong> ou VPN? (Desative para este site).</li>
-                                <li>A URL está correta (sem espaços no final)?</li>
+                        <div className="mt-3 bg-white p-3 rounded-lg border border-red-200 shadow-sm">
+                            <p className="mb-2 text-[11px] font-extrabold text-red-700 uppercase flex items-center gap-1">
+                                <ShieldAlert size={14}/> Ação Necessária:
+                            </p>
+                            <ul className="list-decimal pl-4 space-y-2 text-[11px] leading-tight text-slate-700">
+                                <li>
+                                    <strong>Desative o AdBlock/uBlock:</strong> Extensões de bloqueio impedem a conexão com o banco de dados. Pause-as para este site.
+                                </li>
+                                <li>
+                                    <strong>Projeto Pausado?</strong> Se você não usa o Supabase há dias, entre no painel deles e clique em "Restore Project".
+                                </li>
                             </ul>
                         </div>
                     )}
