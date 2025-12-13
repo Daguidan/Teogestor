@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   AuthSession, 
   OrgStructure, 
@@ -66,7 +66,6 @@ import {
   Server,
   Plus,
   ArrowLeft,
-  Upload,
   RefreshCw,
   Download,
   Loader2,
@@ -74,7 +73,9 @@ import {
   Info,
   MapPin,
   Check,
-  Building2
+  Building2,
+  CloudOff,
+  CopyPlus
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -145,6 +146,7 @@ export const App: React.FC = () => {
   
   const [isRepairingSession, setIsRepairingSession] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false); // Flag to control auto-save start
 
   const [loginError, setLoginError] = useState('');
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
@@ -159,10 +161,17 @@ export const App: React.FC = () => {
   const [providerEventList, setProviderEventList] = useState<ProviderEventInfo[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState('');
+  
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [providerNewEventId, setProviderNewEventId] = useState('');
   const [providerNewEventType, setProviderNewEventType] = useState<EventType>('BETHEL_REP');
   
+  // Clone States
+  const [cloneSourceId, setCloneSourceId] = useState('');
+  const [cloneTargetId, setCloneTargetId] = useState('');
+  const [cloneTargetType, setCloneTargetType] = useState<EventType>('CIRCUIT_OVERSEER');
+  const [isCloning, setIsCloning] = useState(false);
+
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [copyFeedback, setCopyFeedback] = useState('');
   const [pixFeedback, setPixFeedback] = useState('');
@@ -184,6 +193,9 @@ export const App: React.FC = () => {
   const [disambiguationPhoneInput, setDisambiguationPhoneInput] = useState('');
   const [confirmedVolunteer, setConfirmedVolunteer] = useState<VolunteerData | null>(null);
 
+  // Auto-Save Refs
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
       setToastMessage({ type, text });
       setTimeout(() => setToastMessage(null), 4000);
@@ -201,6 +213,52 @@ export const App: React.FC = () => {
       }
       setShowCloudModal(true);
   };
+
+  // --- AUTO-SAVE EFFECT ---
+  useEffect(() => {
+    // Only auto-save if:
+    // 1. Cloud is configured
+    // 2. User is Admin or SuperAdmin
+    // 3. Data has been initially loaded (prevent overwriting cloud with empty state on boot)
+    // 4. Not in template mode (templates are saved manually usually, but here we can allow auto-save too if desired, limiting to standard events for safety first)
+    if (!cloudUrl || !cloudKey || !authSession || (authSession.role !== 'admin' && !authSession.isSuperAdmin) || !dataLoaded) {
+      return;
+    }
+
+    // Cancel previous timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    setSyncStatus('syncing');
+
+    // Debounce save (3 seconds after last change)
+    autoSaveTimerRef.current = setTimeout(async () => {
+       const payload = { 
+         org: orgData, 
+         notes: authSession.isTemplate ? {} : notes, 
+         attendance: authSession.isTemplate ? {} : attendance, 
+         program, 
+         type: selectedEventType, 
+         version: APP_CONFIG.APP_VERSION 
+       };
+       
+       const res = await CloudService.saveEvent(authSession.eventId, payload);
+       
+       if (res.error) {
+         setSyncStatus('error');
+         // Silent console error, toast is distracting on every auto-save fail if offline
+         console.error("Auto-save failed:", res.error); 
+       } else {
+         setSyncStatus('success');
+       }
+    }, 3000);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [orgData, program, notes, attendance, cloudUrl, cloudKey, authSession, selectedEventType, dataLoaded]);
+
 
   // --- PRE-LOAD DATA FUNCTION ---
   const preLoadEventData = async (eventId: string) => {
@@ -335,6 +393,7 @@ export const App: React.FC = () => {
     setIsDisambiguationRequired(false);
     setSelectedUserCongId('');
     setView('dashboard');
+    setDataLoaded(false); // Reset loaded flag
     
     SecureStorage.setItem('active_session', null); 
     SecureStorage.setItem('user_congregation_id', '');
@@ -492,6 +551,7 @@ export const App: React.FC = () => {
       if (!isOrgEmpty(orgData)) {
           // Double check: if orgData matches the logged in event, keep it!
           // This prevents the "blank screen" after a successful cloud load in Incognito.
+          setDataLoaded(true); // Data is ready
           return; 
       }
 
@@ -693,6 +753,8 @@ export const App: React.FC = () => {
         setNotes(savedNotes);
         setAttendance(savedAttendance);
       }
+
+      setDataLoaded(true); // MARK DATA AS LOADED TO ENABLE AUTO-SAVE
     };
 
     loadDataForSession();
@@ -964,6 +1026,58 @@ export const App: React.FC = () => {
       setIsCreatingEvent(false);
       setTimeout(() => setCopyFeedback(''), 4000);
     }
+  };
+
+  // --- CLONE/DUPLICATE EVENT FEATURE ---
+  const handleCloneEvent = async () => {
+      if (!cloneSourceId || !cloneTargetId) {
+          alert("Selecione a origem e defina o ID do novo evento.");
+          return;
+      }
+      
+      if (cloneSourceId === cloneTargetId) {
+          alert("O ID de origem e destino não podem ser iguais.");
+          return;
+      }
+
+      setIsCloning(true);
+      setCopyFeedback("Clonando dados...");
+
+      try {
+          // 1. Carregar dados da origem
+          const sourceRes = await CloudService.loadEvent(cloneSourceId);
+          if (!sourceRes.data) throw new Error("Evento de origem não encontrado ou vazio.");
+
+          // 2. Preparar novo programa com base no tipo selecionado
+          let newProgram = PROGRAM_BETHEL;
+          if (cloneTargetType === 'CIRCUIT_OVERSEER') newProgram = PROGRAM_CO;
+          if (cloneTargetType === 'REGIONAL_CONVENTION') newProgram = PROGRAM_CONVENTION;
+
+          // 3. Montar payload do novo evento (Preserva Org, Reseta o resto)
+          const newPayload = {
+              org: sourceRes.data.org, // Mantém a estrutura/equipe
+              program: newProgram,     // Novo programa zerado
+              notes: {},               // Limpa notas
+              attendance: {},          // Limpa assistência
+              type: cloneTargetType,   // Novo tipo
+              version: APP_CONFIG.APP_VERSION
+          };
+
+          // 4. Salvar no novo ID
+          const saveRes = await CloudService.saveEvent(cloneTargetId.toUpperCase(), newPayload);
+          
+          if (saveRes.error) throw new Error(saveRes.error);
+
+          alert(`Sucesso! O evento "${cloneTargetId}" foi criado copiando a equipe de "${cloneSourceId}".`);
+          setCloneTargetId('');
+          fetchProviderEvents(); // Atualiza a lista
+
+      } catch (error) {
+          alert(`Erro ao clonar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      } finally {
+          setIsCloning(false);
+          setCopyFeedback("");
+      }
   };
 
   const handleCopyPix = () => {
@@ -1496,16 +1610,30 @@ $$;`}
             onClick={handleOpenCloudModal}
             className={`p-2.5 rounded-xl border transition-all flex items-center gap-2 shadow-sm relative ${
               cloudUrl
-                ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200'
-                : 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 animate-pulse'
+                ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100 animate-pulse'
             }`}
-            title={cloudUrl ? 'Nuvem Conectada' : 'Nuvem Desconectada (Configurar)'}
+            title={cloudUrl ? 'Configurar Nuvem' : 'Nuvem Desconectada (Configurar)'}
           >
-            <Cloud size={20} />
-            {!cloudUrl && (
-              <span className="text-[10px] font-bold uppercase hidden sm:inline">
-                Conectar Nuvem
-              </span>
+            {/* INDICADOR DE STATUS DA NUVEM (AUTO-SAVE) */}
+            {cloudUrl ? (
+                <>
+                    {syncStatus === 'syncing' && <RefreshCw size={20} className="animate-spin text-amber-500" />}
+                    {syncStatus === 'success' && <Cloud size={20} className="text-emerald-500" />}
+                    {syncStatus === 'error' && <AlertTriangle size={20} className="text-red-500" />}
+                    {syncStatus === 'idle' && <Cloud size={20} className="text-slate-400" />}
+                    
+                    <span className="text-[10px] font-bold uppercase hidden sm:inline w-20 text-center">
+                        {syncStatus === 'syncing' ? 'Salvando...' : 
+                         syncStatus === 'success' ? 'Salvo' :
+                         syncStatus === 'error' ? 'Erro' : 'Nuvem'}
+                    </span>
+                </>
+            ) : (
+                <>
+                    <CloudOff size={20} />
+                    <span className="text-[10px] font-bold uppercase hidden sm:inline">Conectar</span>
+                </>
             )}
 
             {/* PONTO VERMELHO APENAS PARA MASTER QUANDO HÁ PROBLEMA / FALTA CONFIGURAÇÃO */}
@@ -1522,16 +1650,10 @@ $$;`}
         {/* CONTROLES DE SINCRONIZAÇÃO - SÓ SE TIVER URL */}
         {cloudUrl && (isAdmin || isSuperAdmin) && (
            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 ml-1 hidden md:flex">
-              <button title="Enviar dados para Nuvem (Upload)" onClick={() => handleSync('up')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-brand-600 shadow-sm hover:bg-brand-50 transition-colors border border-slate-100"><Upload size={16}/></button>
               <button title="Baixar dados da Nuvem (Download)" onClick={() => handleSync('down')} disabled={syncStatus === 'syncing'} className="p-2 rounded-lg bg-white text-blue-600 shadow-sm hover:bg-blue-50 transition-colors border border-slate-100"><Download size={16}/></button>
            </div>
         )}
         
-        {/* BOTÃO SYNC MOBILE - CONDENSADO */}
-        {cloudUrl && (isAdmin || isSuperAdmin) && (
-           <button onClick={() => handleSync('up')} className="md:hidden p-2.5 bg-slate-100 text-brand-600 rounded-xl border border-slate-200"><RefreshCw size={18} className={syncStatus === 'syncing' ? 'animate-spin' : ''}/></button>
-        )}
-
         <button onClick={handleLogout} className="ml-1 p-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors border border-red-100">
           <LogoutIcon size={18} />
         </button>
@@ -1615,6 +1737,45 @@ $$;`}
                       </div>
                       <p className="text-xs text-slate-400 mt-3">{copyFeedback || 'Cria um novo evento na nuvem a partir do modelo base e gera o link de convite.'}</p>
                     </div>
+
+                    {/* --- DUPLICATE EVENT (CLONE) FEATURE --- */}
+                    <div className="bg-indigo-50 p-6 rounded-2xl shadow-sm border border-indigo-100">
+                        <h3 className="font-bold text-indigo-900 text-lg flex items-center gap-2 mb-4"><CopyPlus size={18} /> Clonar Estrutura (Novo Evento)</h3>
+                        <p className="text-xs text-indigo-700 mb-4">Use isso para a próxima Assembleia. Copia toda a equipe, voluntários e congregações de um evento anterior, mas zera o programa para o novo tipo.</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                            {/* 1. Source */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Copiar de:</label>
+                                <select className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-bold text-indigo-900" value={cloneSourceId} onChange={e => setCloneSourceId(e.target.value)}>
+                                    <option value="">-- Selecione Origem --</option>
+                                    {providerEventList.map(ev => <option key={ev.id} value={ev.id}>{ev.id}</option>)}
+                                </select>
+                            </div>
+                            
+                            {/* 2. Target */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo ID (ex: SP-01 SET):</label>
+                                <input className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-mono uppercase text-indigo-900 placeholder-indigo-300" placeholder="NOVO ID" value={cloneTargetId} onChange={e => setCloneTargetId(e.target.value)} />
+                            </div>
+
+                            {/* 3. New Type */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1">Novo Programa:</label>
+                                <select className="w-full px-3 py-3 text-sm border border-indigo-200 bg-white rounded-xl outline-none font-bold text-indigo-900" value={cloneTargetType} onChange={e => setCloneTargetType(e.target.value as EventType)}>
+                                    <option value="CIRCUIT_OVERSEER">Assembleia (Sup. Circuito)</option>
+                                    <option value="BETHEL_REP">Assembleia (Rep. Betel)</option>
+                                    <option value="REGIONAL_CONVENTION">Congresso</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <button onClick={handleCloneEvent} disabled={isCloning || !cloneSourceId || !cloneTargetId} className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                            {isCloning ? <Loader2 size={16} className="animate-spin"/> : <CopyPlus size={16}/>} 
+                            {isCloning ? 'Clonando...' : 'Criar Novo Evento com Mesma Equipe'}
+                        </button>
+                    </div>
+
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-4"><PenTool size={18} /> Gerenciar Modelos Base</h3>
                         <p className="text-xs text-slate-500 mb-4">Edite os programas e estruturas padrão que serão usados ao criar novos eventos.</p>

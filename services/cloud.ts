@@ -49,7 +49,7 @@ const cleanUrl = (url: string) => {
 
 // Timeout promise wrapper
 // FIX: Alterado para usar .then(resolve, reject) que é compatível com PromiseLike (Supabase Builder)
-const withTimeout = <T>(promise: PromiseLike<T>, ms: number, errorMessage: string): Promise<T> => {
+const withTimeout = <T>(promise: PromiseLike<T>, ms: number, errorMessage: string): Promise<any> => {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(errorMessage)), ms);
         promise.then(
