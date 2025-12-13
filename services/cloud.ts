@@ -138,6 +138,7 @@ export const CloudService = {
   testConnection: async () => {
     if (!supabase) return { success: false, error: 'Cliente não inicializado' };
     try {
+        // Tenta buscar 1 linha apenas para testar acesso à tabela
         const { error } = await withTimeout(
             supabase.from(TABLE_NAME).select('id').limit(1),
             60000, 
@@ -145,8 +146,13 @@ export const CloudService = {
         );
         
         if (error) {
+            // ERRO CRÍTICO: Tabela não existe
             if (error.code === '42P01') { 
-                return { success: false, error: 'Tabela não encontrada. Crie a tabela "evento" usando o script SQL.' };
+                return { success: false, error: 'A tabela "evento" não existe. Use o Script SQL para criar o banco.' };
+            }
+            // ERRO CRÍTICO: Permissão negada (RLS)
+            if (error.code === '42501' || error.message.includes('permission denied')) {
+                 return { success: false, error: 'Erro de Permissão. Use o Script SQL para corrigir as políticas.' };
             }
             if (error.code === 'PGRST301' || error.message.includes('fetch')) {
                 return { success: false, error: 'Erro de rede. Verifique a URL do projeto Supabase.' };
@@ -199,7 +205,10 @@ export const CloudService = {
           'Tempo limite excedido no upload (60s).'
       );
       
-      if (error) throw error;
+      if (error) {
+         if (error.code === '42P01') throw new Error('Tabela "evento" não existe. Rode o Script SQL.');
+         throw error;
+      }
       return { success: true };
     } catch (e: any) {
       console.error("Erro no upload Cloud:", e);
@@ -226,7 +235,8 @@ export const CloudService = {
       );
 
       if (error) {
-         if (error.code === 'PGRST116') return { data: null };
+         if (error.code === 'PGRST116') return { data: null }; // Não encontrado, normal
+         if (error.code === '42P01') throw new Error('Tabela "evento" não existe. Rode o Script SQL.');
          throw error;
       }
 
@@ -281,6 +291,9 @@ export const CloudService = {
       console.error("Erro ao listar eventos:", e);
       if (e.message && (e.message.includes('Failed to fetch') || e.message === 'Timeout')) {
           return { error: 'Falha de conexão. O banco de dados pode estar acordando. Tente novamente em 30s.' };
+      }
+      if (e.code === '42P01') {
+          return { error: 'A tabela "evento" não existe no Supabase. Configure-a no modal de Nuvem.' };
       }
       return { error: e.message || 'Erro de conexão' };
     }

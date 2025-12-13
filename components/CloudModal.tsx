@@ -36,7 +36,7 @@ export const CloudModal: React.FC<CloudModalProps> = ({
         setCloudKey('');
         setCloudPass('');
         onClose();
-        alert('Nuvem desconectada.');
+        // alert('Nuvem desconectada.'); // Removido alert intrusivo
     }
   };
 
@@ -47,16 +47,24 @@ export const CloudModal: React.FC<CloudModalProps> = ({
     }
     setErrorMsg('');
     setIsTestingCloud(true);
+    
+    // 1. Salva configuração local
     if (CloudService.configure(cloudUrl, cloudKey, cloudPass)) { 
+        // 2. Testa conexão real
         const result = await CloudService.testConnection();
         setIsTestingCloud(false);
+        
         if (result.success) {
             onSuccess();
         } else {
+            // Se falhar, mostra erro e abre o script SQL automaticamente se for crítico
             const msg = result.error || 'Erro desconhecido';
             setErrorMsg(msg);
-            // Sempre mostra o script SQL se der erro, pois 99% das vezes é falta da tabela ou RLS
-            setShowSqlHelp(true);
+            
+            // Se o erro for de tabela não encontrada ou permissão, sugere o script
+            if (msg.includes('tabela') || msg.includes('42P01') || msg.includes('Permissão') || msg.includes('401')) {
+               setShowSqlHelp(true);
+            }
         }
     } else { 
         setIsTestingCloud(false); 
@@ -65,22 +73,23 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   };
 
   const getSqlScript = () => {
-    return `-- SCRIPT DEFINITIVO (Rode no SQL Editor do Supabase)
+    return `-- SCRIPT DE CORREÇÃO DEFINITIVA (Rode no "SQL Editor" do Supabase)
 
--- 1. Limpa instalações anteriores (CUIDADO: Apaga dados existentes na nuvem)
+-- 1. Remove qualquer tabela antiga ou incorreta (Limpeza Total)
 DROP TABLE IF EXISTS evento;
 
--- 2. Cria a tabela correta
+-- 2. Cria a tabela 'evento' com a estrutura correta
 CREATE TABLE public.evento (
     id text PRIMARY KEY,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     data jsonb
 );
 
--- 3. Habilita segurança (RLS)
+-- 3. Habilita Segurança (RLS)
 ALTER TABLE public.evento ENABLE ROW LEVEL SECURITY;
 
--- 4. Cria política de acesso TOTAL (Necessário para o App funcionar sem login de usuário)
+-- 4. Cria Permissão TOTAL (Leitura e Escrita) para o App funcionar
+DROP POLICY IF EXISTS "Acesso Total App" ON public.evento;
 CREATE POLICY "Acesso Total App" ON public.evento
 FOR ALL
 USING (true)
@@ -95,7 +104,7 @@ WITH CHECK (true);`;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up border border-white/20 flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-slide-up border border-white/20 flex flex-col max-h-[90vh]">
         <div className="bg-brand-50 p-6 text-center border-b border-brand-100 relative">
             <button onClick={onClose} className="absolute top-4 right-4 text-brand-400 hover:text-brand-700 transition-colors bg-white/50 p-1.5 rounded-full"><X size={18}/></button>
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-lg ${cloudUrl ? 'bg-emerald-500 text-white' : 'bg-brand-500 text-white'}`}>
@@ -106,27 +115,14 @@ WITH CHECK (true);`;
         </div>
 
         <div className="p-6 space-y-4 overflow-y-auto">
+            {/* ÁREA DE ERRO INTELIGENTE */}
             {errorMsg && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold border border-red-100 flex flex-col gap-2">
-                    <div className="flex items-start gap-2">
-                        <AlertTriangle size={16} className="shrink-0 mt-0.5"/> <span>{errorMsg}</span>
+                <div className="bg-red-50 text-red-800 p-4 rounded-xl text-xs font-bold border border-red-100 flex flex-col gap-2 animate-bounce-in shadow-sm">
+                    <div className="flex items-start gap-2 text-sm">
+                        <AlertTriangle size={18} className="shrink-0 mt-0.5 text-red-600"/> 
+                        <span>{errorMsg}</span>
                     </div>
-                    {errorMsg.includes('acordando') && (
-                        <p className="text-[10px] text-red-500 ml-6">O projeto gratuito do Supabase "dorme" após inatividade. Aguarde alguns segundos e tente novamente.</p>
-                    )}
                 </div>
-            )}
-
-            {cloudUrl && !errorMsg && (
-            <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                <CheckCircle2 size={18} className="text-emerald-500"/>
-                <span className="text-xs font-bold text-emerald-800">Conectado</span>
-                </div>
-                <button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 flex items-center gap-1 shadow-sm transition-all">
-                <Unplug size={12}/> Desconectar
-                </button>
-            </div>
             )}
 
             <div className="space-y-3">
@@ -152,28 +148,47 @@ WITH CHECK (true);`;
                 </div>
             </div>
 
-            {showSqlHelp && (
-            <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] overflow-x-auto border border-slate-700 relative mt-2 animate-fade-in">
-                <button onClick={() => setShowSqlHelp(false)} className="absolute top-2 right-2 text-slate-500 hover:text-white"><X size={14}/></button>
-                <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
-                    <p className="text-slate-400 font-bold">SQL Setup (Definitivo):</p>
-                    <button onClick={handleCopySql} className="text-[9px] bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded flex items-center gap-1 text-white transition-colors">
-                        {copyFeedback ? <CheckCircle2 size={10}/> : <Copy size={10}/>} {copyFeedback || 'Copiar'}
-                    </button>
+            {/* BOTÃO E ÁREA DO SCRIPT SQL */}
+            {!showSqlHelp ? (
+                <button 
+                  onClick={() => setShowSqlHelp(true)} 
+                  className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
+                >
+                  <Database size={14}/> Resolver Erro de Conexão (Ver Script SQL)
+                </button>
+            ) : (
+                <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] border border-slate-700 relative mt-2 animate-fade-in shadow-xl">
+                    <div className="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                        <p className="text-emerald-400 font-bold flex items-center gap-2"><CheckCircle2 size={12}/> Script de Correção:</p>
+                        <div className="flex gap-2">
+                            <button onClick={handleCopySql} className="text-[9px] bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded flex items-center gap-1 text-white transition-colors font-bold">
+                                {copyFeedback ? <CheckCircle2 size={10}/> : <Copy size={10}/>} {copyFeedback || 'Copiar'}
+                            </button>
+                            <button onClick={() => setShowSqlHelp(false)} className="text-slate-400 hover:text-white"><X size={14}/></button>
+                        </div>
+                    </div>
+                    <pre className="whitespace-pre-wrap select-all text-emerald-300 font-bold bg-slate-900/50 p-2 rounded border border-slate-700/50">{getSqlScript()}</pre>
+                    <div className="mt-3 text-[9px] text-white bg-blue-600/20 p-2.5 rounded border border-blue-500/30">
+                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide">Passo a Passo Definitivo:</strong>
+                        1. Copie o código acima.<br/>
+                        2. No site do Supabase, vá em <strong>SQL Editor</strong>.<br/>
+                        3. Cole o código e clique em <strong>RUN</strong>.<br/>
+                        4. Volte aqui e clique em "Salvar e Conectar".
+                    </div>
                 </div>
-                <pre className="whitespace-pre-wrap select-all text-emerald-400 font-bold">{getSqlScript()}</pre>
-                <p className="text-[9px] text-slate-500 mt-2 italic">Cole isso no "SQL Editor" do seu projeto Supabase e clique em "Run".</p>
-            </div>
             )}
 
             <div className="pt-2 flex flex-col gap-2">
-                <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-3.5 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                <button onClick={handleCloudConfigSave} disabled={isTestingCloud} className="w-full py-4 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
                     {isTestingCloud ? <Loader2 size={18} className="animate-spin"/> : <CheckCircle2 size={18}/>}
-                    {isTestingCloud ? 'Testando Conexão...' : 'Salvar e Conectar'}
+                    {isTestingCloud ? 'Testando e Salvando...' : 'Salvar e Conectar'}
                 </button>
-                <button onClick={() => setShowSqlHelp(!showSqlHelp)} className={`w-full py-3 border rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors ${showSqlHelp ? 'bg-slate-100 text-slate-600 border-slate-200' : 'text-brand-600 bg-white border-brand-100 hover:bg-brand-50'}`}>
-                    <Database size={14}/> {showSqlHelp ? 'Ocultar Script SQL' : 'Ver Script SQL de Configuração'}
-                </button>
+                
+                {cloudUrl && !errorMsg && (
+                     <button onClick={handleDisconnectCloud} className="text-[10px] text-red-400 hover:text-red-600 font-bold underline text-center w-full mt-2 flex items-center justify-center gap-1">
+                        <Unplug size={12} /> Desconectar Conta
+                     </button>
+                )}
             </div>
         </div>
       </div>
