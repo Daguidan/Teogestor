@@ -75,7 +75,8 @@ import {
   Check,
   Building2,
   CloudOff,
-  CopyPlus
+  CopyPlus,
+  Unplug
 } from 'lucide-react';
 import { DEFAULT_SECTORS } from './constants';
 
@@ -247,6 +248,17 @@ export const App: React.FC = () => {
           setCloudPass(config.encryptionPass || '');
       }
       setShowCloudModal(true);
+  };
+
+  const handleDisconnectCloud = () => {
+      if(confirm('Tem certeza que deseja desconectar? A sincronização será interrompida.')) {
+          CloudService.disconnect();
+          setCloudUrl('');
+          setCloudKey('');
+          setCloudPass('');
+          setShowCloudModal(false);
+          showToast('Nuvem desconectada.', 'success');
+      }
   };
 
   // --- AUTO-SAVE EFFECT ---
@@ -1497,12 +1509,24 @@ export const App: React.FC = () => {
   <div className="fixed inset-0 bg-white/95 backdrop-blur-md z-[100] p-8 flex flex-col items-center justify-center animate-fade-in overflow-y-auto">
     <div className="w-full max-w-sm space-y-5">
       <div className="text-center">
-        <div className="bg-brand-50 text-brand-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border border-brand-100 shadow-sm">
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 border shadow-sm ${cloudUrl ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-brand-50 text-brand-600 border-brand-100'}`}>
           <Cloud size={32}/>
         </div>
         <h3 className="font-bold text-slate-800 text-xl">Conectar Supabase</h3>
-        <p className="text-xs text-slate-500 mt-1">Cole os dados do seu projeto Supabase abaixo.</p>
+        <p className="text-xs text-slate-500 mt-1">Sincronize seus dados entre dispositivos.</p>
       </div>
+
+      {cloudUrl && (
+          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                  <CheckCircle2 size={18} className="text-emerald-500"/>
+                  <span className="text-xs font-bold text-emerald-800">Conectado</span>
+              </div>
+              <button onClick={handleDisconnectCloud} className="text-[10px] font-bold text-red-500 bg-white px-2 py-1 rounded border border-red-100 hover:bg-red-50 flex items-center gap-1">
+                  <Unplug size={10}/> Desconectar
+              </button>
+          </div>
+      )}
 
       <div className="space-y-3">
         <div>
@@ -1670,7 +1694,7 @@ $$;`}
                 ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                 : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100 animate-pulse'
             }`}
-            title={cloudUrl ? 'Configurar Nuvem' : 'Nuvem Desconectada (Configurar)'}
+            title={cloudUrl ? '✅ Nuvem Conectada (Clique para configurar)' : '☁️ Nuvem Desconectada (Clique para conectar)'}
           >
             {/* INDICADOR DE STATUS DA NUVEM (AUTO-SAVE) */}
             {cloudUrl ? (
