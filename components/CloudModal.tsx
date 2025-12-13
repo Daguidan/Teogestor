@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy, WifiOff } from 'lucide-react';
+import { Cloud, CheckCircle2, Unplug, Eye, EyeOff, Key, Database, Loader2, X, Server, AlertTriangle, Copy, WifiOff, HelpCircle } from 'lucide-react';
 import { CloudService } from '../services/cloud';
 
 interface CloudModalProps {
@@ -61,7 +61,8 @@ export const CloudModal: React.FC<CloudModalProps> = ({
             setErrorMsg(msg);
             
             // Se o erro for de tabela não encontrada ou permissão, sugere o script
-            if (msg.includes('tabela') || msg.includes('42P01') || msg.includes('Permissão') || msg.includes('401')) {
+            // Inclui erro de rede pois muitas vezes é configuração errada que o script não resolve, mas o usuário precisa verificar
+            if (msg.includes('tabela') || msg.includes('42P01') || msg.includes('Permissão') || msg.includes('401') || msg.includes('42501')) {
                setShowSqlHelp(true);
             }
         }
@@ -72,21 +73,22 @@ export const CloudModal: React.FC<CloudModalProps> = ({
   };
 
   const getSqlScript = () => {
-    return `-- SCRIPT INTELIGENTE (Não apaga dados antigos)
+    return `-- SCRIPT CORRETOR (Rode este código para corrigir o erro "already exists")
 
--- 1. Cria a tabela 'evento' APENAS se ela ainda não existir
+-- 1. Cria a tabela APENAS se ela não existir (Evita o erro 42P07)
 CREATE TABLE IF NOT EXISTS public.evento (
     id text PRIMARY KEY,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     data jsonb
 );
 
--- 2. Habilita o sistema de segurança (RLS)
+-- 2. Garante que o RLS está ativo
 ALTER TABLE public.evento ENABLE ROW LEVEL SECURITY;
 
--- 3. Atualiza as permissões de acesso do aplicativo (Remove antigas para evitar duplicidade)
+-- 3. Limpa políticas antigas para evitar duplicidade
 DROP POLICY IF EXISTS "Acesso Total App" ON public.evento;
 
+-- 4. Cria a permissão correta
 CREATE POLICY "Acesso Total App" ON public.evento
 FOR ALL
 USING (true)
@@ -128,6 +130,11 @@ WITH CHECK (true);`;
                         <AlertTriangle size={18} className="shrink-0 mt-0.5 text-red-600"/> 
                         <span>{errorMsg}</span>
                     </div>
+                    {errorMsg.includes('rede') && (
+                        <div className="mt-1 pl-6 text-[10px] opacity-80">
+                            Dica: Verifique se a URL não tem espaços extras ou se o projeto no Supabase não está "Pausado".
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -160,7 +167,7 @@ WITH CHECK (true);`;
                   onClick={() => setShowSqlHelp(true)} 
                   className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
                 >
-                  <Database size={14}/> Resolver Erro de Conexão (Ver Script SQL)
+                  <Database size={14}/> Ajuda com Erros de Conexão (SQL)
                 </button>
             ) : (
                 <div className="bg-slate-800 text-slate-300 p-4 rounded-xl font-mono text-[10px] border border-slate-700 relative mt-2 animate-fade-in shadow-xl">
@@ -175,8 +182,11 @@ WITH CHECK (true);`;
                     </div>
                     <pre className="whitespace-pre-wrap select-all text-emerald-300 font-bold bg-slate-900/50 p-2 rounded border border-slate-700/50">{getSqlScript()}</pre>
                     <div className="mt-3 text-[9px] text-white bg-blue-600/20 p-2.5 rounded border border-blue-500/30">
-                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide">Solução do Erro 42P07:</strong>
-                        Este script é seguro. Ele só cria a tabela se ela não existir e apenas atualiza as permissões, mantendo seus dados salvos intactos.
+                        <strong className="text-blue-200 block mb-1 uppercase tracking-wide flex items-center gap-1"><HelpCircle size={10}/> Como resolver o erro "already exists":</strong>
+                        1. Apague TODO o código que está no editor do Supabase.<br/>
+                        2. Cole este novo código (que usa 'IF NOT EXISTS').<br/>
+                        3. Clique em RUN.<br/>
+                        4. Volte aqui e clique em "Salvar e Conectar".
                     </div>
                 </div>
             )}
